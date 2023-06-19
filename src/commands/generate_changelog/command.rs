@@ -3,7 +3,7 @@ use crate::commands::generate_changelog::errors::Error;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::BuildpackId;
-use libcnb_package::{find_buildpack_dirs, read_buildpack_data, FindBuildpackDirsOptions};
+use libcnb_package::{find_buildpack_dirs, read_buildpack_data};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
@@ -26,12 +26,8 @@ enum ChangelogEntryType {
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
 
-    let find_buildpack_dirs_options = FindBuildpackDirsOptions {
-        ignore: vec![current_dir.join("target")],
-    };
-
-    let buildpack_dirs = find_buildpack_dirs(&current_dir, &find_buildpack_dirs_options)
-        .map_err(Error::FindingBuildpacks)?;
+    let buildpack_dirs = find_buildpack_dirs(&current_dir, &[current_dir.join("target")])
+        .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?;
 
     let changelog_entry_type = match args.version {
         Some(version) => ChangelogEntryType::Version(version),

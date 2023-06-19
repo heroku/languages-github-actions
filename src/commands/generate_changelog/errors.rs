@@ -1,13 +1,13 @@
 use crate::changelog::ChangelogError;
 use crate::github::actions::SetOutputError;
-use libcnb_package::{FindBuildpackDirsError, ReadBuildpackDataError};
+use libcnb_package::{ReadBuildpackDataError};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
     GetCurrentDir(std::io::Error),
-    FindingBuildpacks(FindBuildpackDirsError),
+    FindingBuildpacks(PathBuf, std::io::Error),
     GetBuildpackId(ReadBuildpackDataError),
     ReadingChangelog(PathBuf, std::io::Error),
     ParsingChangelog(PathBuf, ChangelogError),
@@ -21,16 +21,12 @@ impl Display for Error {
                 write!(f, "Failed to get current directory\nError: {error}")
             }
 
-            Error::FindingBuildpacks(finding_buildpack_dirs_error) => {
-                match finding_buildpack_dirs_error {
-                    FindBuildpackDirsError::IO(path, error) => {
-                        write!(
-                            f,
-                            "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-                            path.display()
-                        )
-                    }
-                }
+            Error::FindingBuildpacks(path, error) => {
+                write!(
+                    f,
+                    "I/O error while finding buildpacks\nPath: {}\nError: {error}",
+                    path.display()
+                )
             }
 
             Error::GetBuildpackId(read_buildpack_data_error) => match read_buildpack_data_error {

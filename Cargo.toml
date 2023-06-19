@@ -22,8 +22,8 @@ clap = { version = "4.2.1", default-features = false, features = [
 ] }
 indexmap = "1.9.3"
 lazy_static = "1.4.0"
-libcnb-data = { git = "https://github.com/heroku/libcnb.rs", branch = "ccasey-malax-pairing" }
-libcnb-package = { git = "https://github.com/heroku/libcnb.rs", branch = "ccasey-malax-pairing" }
+libcnb-data = { git = "https://github.com/heroku/libcnb.rs", branch = "feature/W-12731729_libcnb_package" }
+libcnb-package = { git = "https://github.com/heroku/libcnb.rs", branch = "feature/W-12731729_libcnb_package" }
 markdown = "1.0.0-alpha.9"
 rand = "0.8.5"
 regex = "1.8.3"

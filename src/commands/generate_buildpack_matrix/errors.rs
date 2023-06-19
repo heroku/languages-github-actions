@@ -1,11 +1,12 @@
 use crate::github::actions::SetOutputError;
-use libcnb_package::{FindBuildpackDirsError, ReadBuildpackDataError};
+use libcnb_package::{ReadBuildpackDataError};
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
     GetCurrentDir(std::io::Error),
-    FindingBuildpacks(FindBuildpackDirsError),
+    FindingBuildpacks(PathBuf, std::io::Error),
     ReadingBuildpackData(ReadBuildpackDataError),
     SerializingJson(serde_json::Error),
     SetActionOutput(SetOutputError),
@@ -18,16 +19,12 @@ impl Display for Error {
                 write!(f, "Failed to get current directory\nError: {error}")
             }
 
-            Error::FindingBuildpacks(finding_buildpack_dirs_error) => {
-                match finding_buildpack_dirs_error {
-                    FindBuildpackDirsError::IO(path, error) => {
-                        write!(
-                            f,
-                            "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-                            path.display()
-                        )
-                    }
-                }
+            Error::FindingBuildpacks(path, error) => {
+                write!(
+                    f,
+                    "I/O error while finding buildpacks\nPath: {}\nError: {error}",
+                    path.display()
+                )
             }
 
             Error::SetActionOutput(set_output_error) => match set_output_error {

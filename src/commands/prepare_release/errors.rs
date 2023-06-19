@@ -1,11 +1,10 @@
 use crate::changelog::ChangelogError;
 use crate::github::actions::SetOutputError;
-use libcnb_data::buildpack::BuildpackVersion;
-use libcnb_package::FindBuildpackDirsError;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
+use libcnb_data::buildpack::BuildpackVersion;
 use uriparse::URIError;
 
 #[derive(Debug)]
@@ -15,7 +14,7 @@ pub(crate) enum Error {
     NoBuildpacksFound(PathBuf),
     NotAllVersionsMatch(HashMap<PathBuf, BuildpackVersion>),
     NoFixedVersion,
-    FindingBuildpacks(FindBuildpackDirsError),
+    FindingBuildpacks(PathBuf, io::Error),
     ReadingChangelog(PathBuf, io::Error),
     ParsingChangelog(PathBuf, ChangelogError),
     ReadingBuildpack(PathBuf, io::Error),
@@ -59,16 +58,12 @@ impl Display for Error {
                 write!(f, "No fixed version could be determined")
             }
 
-            Error::FindingBuildpacks(finding_buildpack_dirs_error) => {
-                match finding_buildpack_dirs_error {
-                    FindBuildpackDirsError::IO(path, error) => {
-                        write!(
-                            f,
-                            "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-                            path.display()
-                        )
-                    }
-                }
+            Error::FindingBuildpacks(path, error) => {
+                write!(
+                    f,
+                    "I/O error while finding buildpacks\nPath: {}\nError: {error}",
+                    path.display()
+                )
             }
             Error::ReadingBuildpack(path, error) => {
                 write!(
