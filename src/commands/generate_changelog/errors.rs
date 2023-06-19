@@ -1,6 +1,6 @@
 use crate::changelog::ChangelogError;
 use crate::github::actions::SetOutputError;
-use libcnb_package::{ReadBuildpackDataError};
+use libcnb_package::ReadBuildpackDataError;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 

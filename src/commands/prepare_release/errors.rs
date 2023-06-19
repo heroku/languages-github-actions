@@ -1,10 +1,10 @@
 use crate::changelog::ChangelogError;
 use crate::github::actions::SetOutputError;
+use libcnb_data::buildpack::BuildpackVersion;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
-use libcnb_data::buildpack::BuildpackVersion;
 use uriparse::URIError;
 
 #[derive(Debug)]
