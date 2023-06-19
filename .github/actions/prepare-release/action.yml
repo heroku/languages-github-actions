@@ -1,0 +1,20 @@
+name: Prepare Buildpack Release
+description: "Prepares a buildpack release by bumping the fixed version and updating changelogs"
+
+inputs:
+  bump:
+    description: Which coordinate should be incremented? (major, minor, patch)
+    required: true
+  repository_url:
+    description: The URL of the repository (e.g.; https://github.com/octocat/Hello-World)
+    default: https://github.com/${{ github.repository }}
+
+outputs:
+  from_version:
+    description: The previous version
+  to_version:
+    description: The next version
+
+runs:
+  using: node16
+  main: index.js
