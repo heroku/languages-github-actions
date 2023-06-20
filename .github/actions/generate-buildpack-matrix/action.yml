@@ -1,0 +1,10 @@
+name: Generate Buildpack Matrix
+description: "Generates a list of buildpacks containing id and path keys for use in a matrix strategy `include` list"
+
+outputs:
+  buildpacks:
+    description: The list of buildpack (id, path) keys formatted as a JSON array
+
+runs:
+  using: node16
+  main: index.js

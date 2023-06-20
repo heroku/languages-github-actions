@@ -1,0 +1,65 @@
+name: Prepare Buildpack Release
+
+on:
+  workflow_call:
+    inputs:
+      bump:
+        description: "Bump"
+        required: true
+        type: string
+      app_id:
+        description: "GitHub application ID"
+        type: string
+        default: ${{ vars.LINGUIST_GH_APP_ID }}
+    secrets:
+      app_private_key:
+        description: "Private key of the GitHub application"
+        type: string
+        default: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Bump versions and update changelogs
+        id: prepare
+        uses: heroku/languages-github-actions/.github/actions/prepare-release@main
+        with:
+          bump: ${{ inputs.bump }}
+
+      - name: Generate changelog
+        id: generate-changelog
+        uses: heroku/languages-github-actions/.github/actions/generate-changelog@main
+        with:
+          version: ${{ steps.prepare.outputs.to_version }}
+
+      - uses: heroku/use-app-token-action@main
+        id: generate-token
+        with:
+          app_id: ${{ inputs.app_id }}
+          private_key: ${{ secrets.app_private_key }}
+
+      - name: Create pull request
+        id: pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          title: Prepare release v${{ steps.prepare.outputs.to_version }}
+          commit-message: Prepare release v${{ steps.prepare.outputs.to_version }}
+          branch: prepare/v${{ steps.prepare.outputs.to_version }}
+          body: ${{ steps.generate-changelog.outputs.changelog }}
+          labels: "automation"
+
+      - name: Configure pull request
+        if: steps.pr.outputs.pull-request-operation == 'created'
+        run: gh pr merge --auto --squash "${{ steps.pr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}

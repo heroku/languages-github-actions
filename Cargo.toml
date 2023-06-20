@@ -1,0 +1,35 @@
+[package]
+name = "languages-github-actions"
+description = "GitHub Actions for the Languages Team"
+version = "0.0.1"
+repository = "https://github.com/heroku/languages-github-actions.git"
+rust-version = "1.66"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "actions"
+path = "src/main.rs"
+
+[dependencies]
+chrono = "0.4.24"
+clap = { version = "4.2.1", default-features = false, features = [
+    "derive",
+    "error-context",
+    "help",
+    "std",
+    "usage",
+] }
+indexmap = "1.9.3"
+lazy_static = "1.4.0"
+libcnb-data = { git = "https://github.com/heroku/libcnb.rs", branch = "feature/W-12731729_libcnb_package" }
+libcnb-package = { git = "https://github.com/heroku/libcnb.rs", branch = "feature/W-12731729_libcnb_package" }
+markdown = "1.0.0-alpha.9"
+rand = "0.8.5"
+regex = "1.8.3"
+serde = { version = "1.0.145", features = ["derive"] }
+serde_json = "1.0.96"
+toml_edit = "0.19.10"
+uriparse = "0.6.4"
+
+[dev-dependencies]
