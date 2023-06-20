@@ -69,7 +69,7 @@ jobs:
       - check-bootstrap
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [pub-hk-ubuntu-22.04-small]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -111,9 +111,9 @@ jobs:
 
           if [ "$OS" != "windows-latest" ]; then strip "$BINARY"; fi
           if [ "$OS" != "windows-latest" ]; then tar -czf "$ASSET_PATH" -C "./target/release" "$NAME"; fi
-          
+
           if [ "$OS" = "windows-latest" ]; then tar --force-local -czf "$ASSET_PATH" -C "./target/release" "$NAME"; fi
-          
+
           echo "path=${ASSET_PATH}" >> "$GITHUB_OUTPUT"
       - name: Create Release
         uses: softprops/action-gh-release@v1
