@@ -10,12 +10,11 @@ on:
       app_id:
         description: "GitHub application ID"
         type: string
-        default: ${{ vars.LINGUIST_GH_APP_ID }}
+        required: true
     secrets:
       app_private_key:
         description: "Private key of the GitHub application"
-        type: string
-        default: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
+        required: true
 
 permissions:
   contents: write
