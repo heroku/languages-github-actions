@@ -8,6 +8,10 @@ inputs:
   repository_url:
     description: The URL of the repository (e.g.; https://github.com/octocat/Hello-World)
     default: https://github.com/${{ github.repository }}
+    required: false
+  declarations_starting_version:
+    description: When generating markdown declarations for each release, what version should be the start
+    required: false
 
 outputs:
   from_version:

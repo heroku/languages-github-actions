@@ -27,6 +27,7 @@ libcnb-package = "0.13.0"
 markdown = "1.0.0-alpha.10"
 rand = "0.8.5"
 regex = "1.8.3"
+semver = "1.0.17"
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.97"
 toml_edit = "0.19.10"

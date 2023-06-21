@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use regex::Regex;
+use semver::Version;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -93,7 +94,9 @@ impl TryFrom<&str> for Changelog {
                 if UNRELEASED_HEADER.is_match(&header) && !body.is_empty() {
                     unreleased = Some(body);
                 } else if let Some(captures) = VERSION_HEADER.captures(&header) {
-                    let version = captures[1].to_string();
+                    let version = captures[1]
+                        .parse::<Version>()
+                        .map_err(ChangelogError::ParseVersion)?;
                     let year = captures[2]
                         .parse::<i32>()
                         .map_err(ChangelogError::ParseReleaseEntryYear)?;
@@ -108,12 +111,14 @@ impl TryFrom<&str> for Changelog {
                         LocalResult::Single(value) => Ok(value),
                         LocalResult::Ambiguous(_, _) => Err(ChangelogError::AmbiguousReleaseDate),
                     }?;
-                    let release_entry = ReleaseEntry {
-                        version: version.clone(),
-                        body,
-                        date,
-                    };
-                    releases.insert(version, release_entry);
+                    releases.insert(
+                        version.to_string(),
+                        ReleaseEntry {
+                            version,
+                            body,
+                            date,
+                        },
+                    );
                 }
             }
 
@@ -138,7 +143,7 @@ impl Display for Changelog {
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).     
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
         "#
             .trim()
         )?;
@@ -152,11 +157,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         for entry in self.releases.values() {
             write!(
                 f,
-                "\n\n## [{}] - {}\n\n{}",
+                "\n\n## [{}] - {}",
                 entry.version,
-                entry.date.format("%Y-%m-%d"),
-                entry.body.trim()
+                entry.date.format("%Y-%m-%d")
             )?;
+            if !entry.body.is_empty() {
+                write!(f, "\n\n{}", entry.body.trim())?;
+            }
         }
 
         writeln!(f)
@@ -165,7 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ReleaseEntry {
-    pub(crate) version: String,
+    pub(crate) version: Version,
     pub(crate) date: DateTime<Utc>,
     pub(crate) body: String,
 }
@@ -174,6 +181,7 @@ pub(crate) struct ReleaseEntry {
 pub(crate) enum ChangelogError {
     NoRootNode,
     Parse(String),
+    ParseVersion(semver::Error),
     ParseReleaseEntryYear(ParseIntError),
     ParseReleaseEntryMonth(ParseIntError),
     ParseReleaseEntryDay(ParseIntError),
@@ -189,6 +197,9 @@ impl Display for ChangelogError {
             }
             ChangelogError::Parse(error) => {
                 write!(f, "Could not parse changelog - {error}")
+            }
+            ChangelogError::ParseVersion(error) => {
+                write!(f, "Invalid semver version in release entry - {error}")
             }
             ChangelogError::ParseReleaseEntryYear(error) => {
                 write!(f, "Invalid year in release entry - {error}")
@@ -212,9 +223,22 @@ impl Display for ChangelogError {
 pub(crate) fn generate_release_declarations<S: Into<String>>(
     changelog: &Changelog,
     repository: S,
+    starting_with_version: &Option<Version>,
 ) -> String {
     let repository = repository.into();
-    let mut versions = changelog.releases.keys();
+
+    let mut versions = changelog.releases.values().filter_map(|release| {
+        if let Some(starting_version) = &starting_with_version {
+            if starting_version.le(&release.version) {
+                Some(&release.version)
+            } else {
+                None
+            }
+        } else {
+            Some(&release.version)
+        }
+    });
+
     let mut declarations = vec![];
     let mut previous_version = versions.next();
 
@@ -244,11 +268,57 @@ pub(crate) fn generate_release_declarations<S: Into<String>>(
 mod test {
     use crate::changelog::{generate_release_declarations, Changelog};
     use chrono::{TimeZone, Utc};
+    use semver::Version;
 
     #[test]
     fn test_keep_a_changelog_unreleased_entry_with_changes_parsing() {
         let changelog = Changelog::try_from("## [Unreleased]\n\n- Some changes").unwrap();
         assert_eq!(changelog.unreleased, Some("- Some changes".to_string()));
+    }
+
+    #[test]
+    fn test_blank_release_0_5_5_entry_from_jvm_repo() {
+        let changelog = Changelog::try_from(
+            "## [Unreleased]
+
+## [0.6.0] 2022/01/05
+
+- Switch to BSD 3-Clause License
+- Upgrade to libcnb version 0.4.0
+- Updated function runtime to 1.0.5
+
+## [0.5.5] 2021/10/19
+
+## [0.5.4] 2021/09/30
+
+- Updated function runtime to 1.0.3",
+        )
+        .unwrap();
+        assert_eq!(changelog.releases.get("0.5.5").unwrap().body, "");
+        assert_eq!(
+            changelog.to_string(),
+            "# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.6.0] - 2022-01-05
+
+- Switch to BSD 3-Clause License
+- Upgrade to libcnb version 0.4.0
+- Updated function runtime to 1.0.5
+
+## [0.5.5] - 2021-10-19
+
+## [0.5.4] - 2021-09-30
+
+- Updated function runtime to 1.0.3
+"
+        )
     }
 
     #[test]
@@ -261,7 +331,7 @@ mod test {
     fn test_keep_a_changelog_release_entry_parsing() {
         let changelog = Changelog::try_from(KEEP_A_CHANGELOG_1_0_0).unwrap();
         let release_entry = changelog.releases.get("1.1.1").unwrap();
-        assert_eq!(release_entry.version, "1.1.1");
+        assert_eq!(release_entry.version, "1.1.1".parse::<Version>().unwrap());
         assert_eq!(
             release_entry.date,
             Utc.with_ymd_and_hms(2023, 3, 5, 0, 0, 0).unwrap()
@@ -317,7 +387,7 @@ mod test {
         )
         .unwrap();
         let release_entry = changelog.releases.get("1.0.10").unwrap();
-        assert_eq!(release_entry.version, "1.0.10");
+        assert_eq!(release_entry.version, "1.0.10".parse::<Version>().unwrap());
         assert_eq!(
             release_entry.date,
             Utc.with_ymd_and_hms(2023, 5, 10, 0, 0, 0).unwrap()
@@ -350,6 +420,7 @@ mod test {
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
+            &None,
         );
         assert_eq!(
             declarations,
@@ -377,6 +448,7 @@ mod test {
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
+            &None,
         );
         assert_eq!(
             declarations,
@@ -392,10 +464,34 @@ mod test {
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
+            &None,
         );
         assert_eq!(
             declarations,
             "[unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v0.0.1...HEAD\n[0.0.1]: https://github.com/olivierlacan/keep-a-changelog/releases/tag/v0.0.1"
+        );
+    }
+
+    #[test]
+    fn test_generate_release_declarations_starting_with_release() {
+        let changelog = Changelog::try_from(KEEP_A_CHANGELOG_1_0_0).unwrap();
+        let declarations = generate_release_declarations(
+            &changelog,
+            "https://github.com/olivierlacan/keep-a-changelog",
+            &Some(Version {
+                major: 1,
+                minor: 0,
+                patch: 0,
+                pre: Default::default(),
+                build: Default::default(),
+            }),
+        );
+        assert_eq!(
+            declarations,
+            r#"[unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/olivierlacan/keep-a-changelog/releases/tag/v1.0.0"#
         );
     }
 

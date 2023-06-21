@@ -282,6 +282,7 @@ dependencies = [
  "markdown",
  "rand",
  "regex",
+ "semver",
  "serde",
  "serde_json",
  "toml_edit",
