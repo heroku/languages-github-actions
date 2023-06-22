@@ -1,0 +1,21 @@
+name: Check Buildpack Registry
+description: "Generates a list of buildpacks containing id and path keys for use in a matrix strategy `include` list"
+
+inputs:
+  buildpack_id:
+    description: The id of the buildpack to check for
+    required: true
+  buildpack_version:
+    description: The version of the buildpack to check for
+    required: true
+  path:
+    description: Relative path under $GITHUB_WORKSPACE to execute in
+    required: true
+
+outputs:
+  is_registered:
+    description: If the buildpack version is already registered with the registry already
+
+runs:
+  using: node16
+  main: index.js
