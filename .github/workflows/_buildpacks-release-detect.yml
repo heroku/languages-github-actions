@@ -5,7 +5,7 @@ on:
     outputs:
       buildpacks:
         description: An array of (id, path) entries for each detected buildpack in JSON format
-        value: ${{ jobs.detect.outputs.buildpacks }}
+        value: ${{ jobs.release-detect.outputs.buildpacks }}
 
 permissions:
   contents: read
