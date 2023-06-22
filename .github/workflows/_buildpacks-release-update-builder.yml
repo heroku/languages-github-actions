@@ -64,7 +64,7 @@ jobs:
           path: ./builder
           delete-branch: true
           branch: update/${{ github.repository }}/${{ steps.buildpack.outputs.buildpack_version }}
-          body-path: ../${{ steps.buildpack.outputs.changes_file }}
+          body-path: ${{ steps.buildpack.outputs.changes_file }}
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash --repo heroku/builder "${{ steps.pr.outputs.pull-request-number }}"

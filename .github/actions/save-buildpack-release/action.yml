@@ -41,7 +41,7 @@ runs:
       shell: bash
       run: |
         cat << "EOF" > ./${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes
-        ${{ steps.generate-changelog.outputs.changelog }}
+        ${{ inputs.changes }}
         EOF
         cat ./${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes
     - name: Move CNB file
