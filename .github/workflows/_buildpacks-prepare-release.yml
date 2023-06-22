@@ -11,6 +11,10 @@ on:
         description: "GitHub application ID"
         type: string
         required: true
+      declarations_starting_version:
+        description: When generating markdown declarations for each release, what version should be the start
+        type: string
+        required: false
     secrets:
       app_private_key:
         description: "Private key of the GitHub application"
@@ -33,6 +37,7 @@ jobs:
         uses: heroku/languages-github-actions/.github/actions/prepare-release@main
         with:
           bump: ${{ inputs.bump }}
+          declarations_starting_version: ${{ inputs.declarations_starting_version }}
 
       - name: Generate changelog
         id: generate-changelog
