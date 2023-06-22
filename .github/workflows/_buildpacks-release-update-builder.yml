@@ -1,0 +1,64 @@
+name: Update Builder
+
+on:
+  workflow_call:
+    inputs:
+      buildpack_id:
+        required: true
+        type: string
+        description: The id of the buildpack to package
+    #   app_id:
+    #     description: "GitHub application ID"
+    #     type: string
+    #     required: true
+    # secrets:
+    #   app_private_key:
+    #     description: "Private key of the GitHub application"
+    #     required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  release-update-builder:
+    name: Update Builder
+    runs-on: pub-hk-ubuntu-22.04-small
+    steps:
+      - name: Restore buildpack release artifacts
+        id: buildpack
+        uses: heroku/languages-github-actions/.github/actions/restore-buildpack-release@main
+        with:
+          buildpack_id: ${{ inputs.buildpack_id }}
+      - name: Install crane
+        uses: buildpacks/github-actions/setup-tools@v5.2.0
+#        - name: Calculate the buildpack image digest
+#        id: digest
+#        run: echo "value=$(crane digest ${{ steps.buildpack.outputs.docker_repository }}:${{ steps.buildpack.outputs.buildpack_version }})" >> "$GITHUB_OUTPUT"
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: heroku/builder
+          path: ./builder
+      - name: Update Builder
+        uses: heroku/languages-github-actions/.github/actions/update-builder@main
+        with:
+          path: ./builder
+          buildpack_id: ${{ inputs.buildpack_id }}
+          buildpack_version: ${{ steps.buildpack.outputs.buildpack_version }}
+          buildpack_uri: ${{ steps.buildpack.outputs.docker_repository }}@${{ steps.digest.outputs.value }}
+          builders: |
+            builder-22
+            buildpacks-20
+            builder-classic-22
+#      - name: Create Pull Request
+#        id: pr
+#        uses: peter-evans/create-pull-request@v5
+#        with:
+#          path: ./builder
+#          delete-branch: true
+#          branch: update/${{ github.repository }}/${{ steps.buildpack.outputs.buildpack_version }}
+#          body-path: ../${{ steps.buildpack.outputs.changes_file }}
+#      - name: Configure PR
+#        if: steps.pr.outputs.pull-request-operation == 'created'
+#        run: gh pr merge --auto --squash --repo heroku/builder "${{ steps.pr.outputs.pull-request-number }}"
