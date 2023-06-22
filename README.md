@@ -8,13 +8,13 @@ A set of custom GitHub Actions and reusable workflow used by the Languages Team.
 
 This action generates a list of buildpack `id` and `path` values.  E.g.;
 
-```json
+```js
 [
   {
     "id": "some/buildpack-id",
     "path": "/path/to/some/buildpack"
   },
-  ...
+  // ...
 ]
 ```
 
@@ -79,10 +79,11 @@ You can also pin to a [specific release](/releases) version in the format `@v{ma
 
 #### Inputs
 
-| Name             | Description                                                              | Required | Default                                       |
-|------------------|--------------------------------------------------------------------------|----------|-----------------------------------------------|
-| `bump`           | Which coordinate should be incremented? (major, minor, patch)            | true     |                                               |
-| `repository_url` | The URL of the repository (e.g.; https://github.com/octocat/Hello-World) | false    | `https://github.com/${{ github.repository }}` |
+| Name                            | Description                                                                              | Required | Default                                       |
+|---------------------------------|------------------------------------------------------------------------------------------|----------|-----------------------------------------------|
+| `bump`                          | Which coordinate should be incremented? (major, minor, patch)                            | true     |                                               |
+| `repository_url`                | The URL of the repository (e.g.; https://github.com/octocat/Hello-World)                 | false    | `https://github.com/${{ github.repository }}` |
+| `declarations_starting_version` | When generating markdown declarations for each release, what version should be the start | false    |                                               |
 
 #### Outputs
 
@@ -111,7 +112,7 @@ You can also pin to a [specific release](/releases) version in the format `@v{ma
 | `buildpack_id`      | The id of the buildpack                              | true     |                    |
 | `buildpack_version` | The version of the buildpack                         | true     |                    |
 | `buildpack_uri`     | The URI of the published buildpack                   | true     |                    |
-| `builders`          | A comma-separated list of builders to update         | true     |                    | 
+| `builders`          | A comma-separated list of builders to update         | true     |                    |
 | `path`              | Relative path under `GITHUB_WORKSPACE` to execute in | false    | `GITHUB_WORKSPACE` |
 
 ## Development
@@ -130,17 +131,17 @@ Commands:
   help                       Print this message or the help of the given subcommand(s)
 ```
 
-This `actions` command is bootstraped into the GitHub Action environment using the script found at 
+This `actions` command is bootstraped into the GitHub Action environment using the script found at
 [`.github/bootstrap/bootstrap.ts`](.github/bootstrap/bootstrap.ts) which attempts to download this command from this
 repository's [releases](/releases) page.
 
-> **Note** 
-> 
-> Any changes made to this bootstrap script will need to be recompiled by running `npm run build` and committing the bundled 
+> **Note**
+>
+> Any changes made to this bootstrap script will need to be recompiled by running `npm run build` and committing the bundled
 > script into GitHub. You'll need Node and NPM installed to do this.
 
-Each of the custom actions must import this bootstrap script to obtain access to the `actions` command line application and 
-then it must provide a list of arguments to invoke the target action.  
+Each of the custom actions must import this bootstrap script to obtain access to the `actions` command line application and
+then it must provide a list of arguments to invoke the target action.
 
 For example, this would invoke `actions generate-buildpack-matrix`:
 

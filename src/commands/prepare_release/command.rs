@@ -6,6 +6,7 @@ use clap::{Parser, ValueEnum};
 use indexmap::IndexMap;
 use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
 use libcnb_package::find_buildpack_dirs;
+use semver::Version;
 use std::collections::{HashMap, HashSet};
 use std::fs::write;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,8 @@ pub(crate) struct PrepareReleaseArgs {
     pub(crate) bump: BumpCoordinate,
     #[arg(long)]
     pub(crate) repository_url: Option<String>,
+    #[arg(long)]
+    pub(crate) declarations_starting_version: Option<String>,
 }
 
 #[derive(ValueEnum, Debug, Clone)]
@@ -50,6 +53,15 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
             URI::try_from(url.as_str())
                 .map(|uri| uri.into_owned())
                 .map_err(|e| Error::InvalidRepositoryUrl(url.clone(), e))
+        })
+        .transpose()?;
+
+    let declarations_starting_version = args
+        .declarations_starting_version
+        .map(|value| {
+            value
+                .parse::<Version>()
+                .map_err(|e| Error::InvalidDeclarationsStartingVersion(value, e))
         })
         .transpose()?;
 
@@ -108,8 +120,11 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
 
         let changelog_contents = match &repository_url {
             Some(repository) => {
-                let release_declarations =
-                    generate_release_declarations(&new_changelog, repository.to_string());
+                let release_declarations = generate_release_declarations(
+                    &new_changelog,
+                    repository.to_string(),
+                    &declarations_starting_version,
+                );
                 format!("{new_changelog}\n{release_declarations}")
             }
             None => new_changelog.to_string(),
@@ -333,7 +348,13 @@ fn promote_changelog_unreleased_to_version(
     };
 
     let new_release_entry = ReleaseEntry {
-        version: version.to_string(),
+        version: Version {
+            major: version.major,
+            minor: version.minor,
+            patch: version.patch,
+            pre: Default::default(),
+            build: Default::default(),
+        },
         date: *date,
         body,
     };
@@ -360,6 +381,7 @@ mod test {
     use indexmap::IndexMap;
     use libcnb_data::buildpack::BuildpackVersion;
     use libcnb_data::buildpack_id;
+    use semver::Version;
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::str::FromStr;
@@ -516,13 +538,13 @@ optional = true
     #[test]
     fn test_promote_changelog_unreleased_to_version_with_existing_entries() {
         let release_entry_0_8_16 = ReleaseEntry {
-            version: "0.8.16".to_string(),
+            version: "0.8.16".parse::<Version>().unwrap(),
             date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
             body: "- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.\n- Added node version 18.14.0, 19.6.0.".to_string()
         };
 
         let release_entry_0_8_15 = ReleaseEntry {
-            version: "0.8.15".to_string(),
+            version: "0.8.15".parse::<Version>().unwrap(),
             date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
             body: "- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))\n- Added node version 19.5.0.".to_string()
         };
@@ -569,7 +591,7 @@ optional = true
         assert_eq!(
             changelog.releases.get("0.8.17"),
             Some(&ReleaseEntry {
-                version: "0.8.17".to_string(),
+                version: "0.8.17".parse::<Version>().unwrap(),
                 date,
                 body: "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2".to_string()
             })
@@ -612,7 +634,7 @@ optional = true
         assert_eq!(
             changelog.releases.get("0.8.17"),
             Some(&ReleaseEntry {
-                version: "0.8.17".to_string(),
+                version: "0.8.17".parse::<Version>().unwrap(),
                 date,
                 body: "- No changes".to_string()
             })
@@ -623,13 +645,13 @@ optional = true
     fn test_promote_changelog_unreleased_to_version_with_existing_entries_and_updated_dependencies()
     {
         let release_entry_0_8_16 = ReleaseEntry {
-            version: "0.8.16".to_string(),
+            version: "0.8.16".parse::<Version>().unwrap(),
             date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
             body: "- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.\n- Added node version 18.14.0, 19.6.0.".to_string()
         };
 
         let release_entry_0_8_15 = ReleaseEntry {
-            version: "0.8.15".to_string(),
+            version: "0.8.15".parse::<Version>().unwrap(),
             date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
             body: "- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))\n- Added node version 19.5.0.".to_string()
         };
@@ -676,7 +698,7 @@ optional = true
         assert_eq!(
             changelog.releases.get("0.8.17"),
             Some(&ReleaseEntry {
-                version: "0.8.17".to_string(),
+                version: "0.8.17".parse::<Version>().unwrap(),
                 date,
                 body: "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2\n- Updated `a` to `0.8.17`\n- Updated `b` to `0.8.17`".to_string()
             })
@@ -719,7 +741,7 @@ optional = true
         assert_eq!(
             changelog.releases.get("0.8.17"),
             Some(&ReleaseEntry {
-                version: "0.8.17".to_string(),
+                version: "0.8.17".parse::<Version>().unwrap(),
                 date,
                 body: "- Updated `a` to `0.8.17`\n- Updated `b` to `0.8.17`".to_string()
             })

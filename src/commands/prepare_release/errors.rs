@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
-use uriparse::URIError;
 
 #[derive(Debug)]
 pub(crate) enum Error {
     GetCurrentDir(io::Error),
-    InvalidRepositoryUrl(String, URIError),
+    InvalidRepositoryUrl(String, uriparse::URIError),
+    InvalidDeclarationsStartingVersion(String, semver::Error),
     NoBuildpacksFound(PathBuf),
     NotAllVersionsMatch(HashMap<PathBuf, BuildpackVersion>),
     NoFixedVersion,
@@ -35,7 +35,14 @@ impl Display for Error {
             }
 
             Error::InvalidRepositoryUrl(value, error) => {
-                write!(f, "Invalid URL `{value}`\nError: {error}")
+                write!(
+                    f,
+                    "Invalid URL `{value}` for argument --repository-url\nError: {error}"
+                )
+            }
+
+            Error::InvalidDeclarationsStartingVersion(value, error) => {
+                write!(f, "Invalid Version `{value}` for argument --declarations-starting-version\nError: {error}")
             }
 
             Error::NoBuildpacksFound(path) => {
