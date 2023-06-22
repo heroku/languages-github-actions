@@ -15,6 +15,9 @@ require('../../bootstrap').invokeWith(({ getInput }) => {
         getInput('buildpack_uri', { required: true }),
 
         '--builders',
-        getInput('builders', { required: true }),
+        getInput('builders', { required: true })
+            .split('\n')
+            .map(v => v.trim())
+            .join(','),
     ]
 })
