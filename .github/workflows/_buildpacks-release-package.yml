@@ -1,0 +1,80 @@
+name: Package
+
+on:
+  workflow_call:
+    inputs:
+      buildpack_id:
+        required: true
+        type: string
+        description: The id of the buildpack to package
+      buildpack_path:
+        required: true
+        type: string
+        description: The path to the buildpack to package
+
+permissions:
+  contents: read
+
+jobs:
+  release-package:
+    runs-on: ubuntu-latest
+    name: Package
+    steps:
+      # Setup
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install musl-tools
+        run: sudo apt-get install musl-tools --no-install-recommends
+      - name: Update Rust toolchain
+        run: rustup update
+      - name: Install Rust linux-musl target
+        run: rustup target add x86_64-unknown-linux-musl
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+      - name: Install Pack CLI
+        uses: buildpacks/github-actions/setup-pack@v5.2.0
+      - name: Install yj
+        uses: buildpacks/github-actions/setup-tools@v5.2.0
+      - name: Install libcnb-cargo
+        run: cargo install libcnb-cargo
+
+      # Package
+      - name: Get buildpack artifact prefix
+        id: buildpack_artifact_prefix
+        uses: heroku/languages-github-actions/.github/actions/buildpack-artifact-prefix@main
+        with:
+          buildpack_id: ${{ inputs.buildpack_id }}
+      - name: Package buildpack
+        id: libcnb-package
+        working-directory: ${{ inputs.buildpack_path }}
+        run: echo "dir=$(cargo libcnb package --release)" >> $GITHUB_OUTPUT
+      - name: Save CNB File
+        run: pack buildpack package ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb --config ${{ steps.libcnb-package.outputs.dir }}/package.toml --format file -v
+      - name: Create Docker Image
+        run: pack buildpack package ${{ inputs.buildpack_id }} --config ${{ steps.libcnb-package.outputs.dir }}/package.toml -v
+      - name: Save Docker Image
+        run: docker save ${{ inputs.buildpack_id }} | zstd -T0 --long=31 -o ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst
+
+      # Extract metadata
+      - name: Read buildpack version
+        id: version
+        run: echo "value=$(yj -t < ${{ inputs.buildpack_path }}/buildpack.toml | jq -r .buildpack.version)" >> $GITHUB_OUTPUT
+      - name: Read buildpack Docker repository
+        id: docker_repository
+        run: echo "value=$(yj -t < ${{ inputs.buildpack_path }}/buildpack.toml | jq -r .metadata.release.docker.repository)" >> $GITHUB_OUTPUT
+      - name: Generate Changelog
+        id: generate-changelog
+        uses: heroku/languages-github-actions/.github/actions/generate-changelog@main
+        with:
+          version: ${{ steps.version.outputs.value }}
+
+      # Save release artifacts
+      - name: Save buildpack release artifacts
+        uses: heroku/languages-github-actions/.github/actions/save-buildpack-release@main
+        with:
+          buildpack_id: ${{ inputs.buildpack_id }}
+          buildpack_version: ${{ steps.version.outputs.value }}
+          docker_repository: ${{ steps.docker_repository.outputs.value }}
+          changes: ${{ steps.generate-changelog.outputs.changelog }}
+          cnb_file: ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb
+          docker_image: ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst

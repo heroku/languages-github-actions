@@ -1,0 +1,67 @@
+name: Save buildpack release output
+description: Saves various artifacts used in the buildpack release phases
+
+inputs:
+  buildpack_id:
+    required: true
+    description: The buildpack id to cache artifacts for
+  buildpack_version:
+    required: true
+    description: The buildpack version
+  docker_repository:
+    required: true
+    description: The repository name to be used in Docker publishing
+  changes:
+    required: true
+    description: This content will be used in PRs and GitHub Releases created
+  cnb_file:
+    required: true
+    description: The path to the package .cnb buildpack file
+  docker_image:
+    required: true
+    description: The path to the compressed docker image
+
+runs:
+  using: composite
+  steps:
+    - name: Get buildpack artifact prefix
+      id: buildpack_artifact_prefix
+      uses: heroku/languages-github-actions/.github/actions/buildpack-artifact-prefix@main
+      with:
+        buildpack_id: ${{ inputs.buildpack_id }}
+    - name: Save Buildpack Variables
+      shell: bash
+      run: |
+        cat << "EOF" > ./${{ steps.buildpack_artifact_prefix.outputs.prefix }}.metadata
+        buildpack_version=${{ inputs.buildpack_version }}
+        docker_repository=${{ inputs.docker_repository }}
+        EOF
+        cat ./${{ steps.buildpack_artifact_prefix.outputs.prefix }}.metadata
+    - name: Save Changelog
+      shell: bash
+      run: |
+        cat << "EOF" > ./${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes
+        ${{ steps.generate-changelog.outputs.changelog }}
+        EOF
+        cat ./${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes
+    - name: Move CNB file
+      shell: bash
+      run: |
+        if [ "${{ inputs.cnb_file }}" != "${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb" ]; then
+          mv ${{ inputs.cnb_file }} ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb
+        fi
+    - name: Move Docker image
+      shell: bash
+      if: ${{ inputs.docker_image }} != ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst
+      run: |
+        if [ "${{ inputs.docker_image }}" != "${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst" ]; then
+          mv ${{ inputs.docker_image }} ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst
+        fi
+    - uses: actions/cache/save@v3
+      with:
+        key: ${{ github.run_id }}-${{ inputs.buildpack_id }}
+        path: |
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.metadata
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes

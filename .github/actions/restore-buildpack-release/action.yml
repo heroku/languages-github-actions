@@ -1,0 +1,48 @@
+name: Save buildpack release output
+description: Saves various artifacts used in the buildpack release phases
+
+inputs:
+  buildpack_id:
+    required: true
+    description: The buildpack id to cache artifacts for
+
+outputs:
+  buildpack_version:
+    description: The buildpack version
+    value: ${{ steps.metadata.outputs.buildpack_version }}
+  docker_repository:
+    description: The repository name to be used in Docker publishing
+    value: ${{ steps.metadata.outputs.docker_repository }}
+  changes_file:
+    description: This content will be used in PRs and GitHub Releases created
+    value: ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes
+  cnb_file:
+    description: The path to the package .cnb buildpack file
+    value: ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb
+  docker_image:
+    description: The path to the compressed docker image
+    value: ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst
+
+runs:
+  using: composite
+  steps:
+    - name: Get buildpack artifact prefix
+      id: buildpack_artifact_prefix
+      uses: heroku/languages-github-actions/.github/actions/buildpack-artifact-prefix@main
+      with:
+        buildpack_id: ${{ inputs.buildpack_id }}
+    - name: Restore cached assets
+      uses: actions/cache/restore@v3
+      with:
+        key: ${{ github.run_id }}-${{ inputs.buildpack_id }}
+        path: |
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.cnb
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.tar.zst
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.metadata
+          ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.changes
+    - name: Restore buildpack metadata
+      id: metadata
+      shell: bash
+      run: cat ${{ steps.buildpack_artifact_prefix.outputs.prefix }}.metadata >> $GITHUB_OUTPUT
+
+
