@@ -1,9 +1,9 @@
 name: Generate Buildpack Matrix
-description: "Generates a list of buildpacks containing id and path keys for use in a matrix strategy `include` list"
+description: "Generates a list of buildpacks information for use in a matrix strategy `include` list"
 
 outputs:
   buildpacks:
-    description: The list of buildpack (id, path) keys formatted as a JSON array
+    description: The list of (buildpack_id, buildpack_version, buildpack_path, docker_repository) keys for a buildpack formatted as a JSON array
 
 runs:
   using: node16

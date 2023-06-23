@@ -2,17 +2,11 @@ require('../../bootstrap').invokeWith(({ getInput }) => {
     return [
         'update-builder',
 
-        '--path',
-        getInput('path', { required: true }),
+        '--repository-path',
+        getInput('repository_path', { required: true }),
 
-        '--buildpack-id',
-        getInput('buildpack_id', { required: true }),
-
-        '--buildpack-version',
-        getInput('buildpack_version', { required: true }),
-
-        '--buildpack-uri',
-        getInput('buildpack_uri', { required: true }),
+        '--builder_repository-path',
+        getInput('builder_repository_path', { required: true }),
 
         '--builders',
         getInput('builders', { required: true })
