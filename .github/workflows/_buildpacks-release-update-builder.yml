@@ -56,9 +56,9 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
-          title: Update ${{ github.repository }} to v${{ steps.buildpack.outputs.buildpack_version }}
+          title: Update ${{ github.repository }}
           path: ./builder
-          branch: update/${{ github.repository }}/${{ steps.buildpack.outputs.buildpack_version }}
+          branch: update/${{ github.repository }}
           body-path: ${{ steps.buildpack.outputs.changes_file }}
 
       - name: Configure PR
