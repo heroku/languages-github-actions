@@ -33,7 +33,7 @@ pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
     let buildpacks = find_buildpack_dirs(&repository_path, &[repository_path.join("target")])
         .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?
         .into_iter()
-        .map(|dir| read_buildpack_data(&dir).map_err(Error::ReadingBuildpackData))
+        .map(|dir| read_buildpack_data(dir).map_err(Error::ReadingBuildpackData))
         .collect::<Result<Vec<_>>>()?;
 
     if buildpacks.is_empty() {

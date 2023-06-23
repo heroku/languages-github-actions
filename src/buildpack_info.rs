@@ -48,7 +48,7 @@ pub(crate) enum CalculateDigestError {
 
 pub(crate) fn calculate_digest(digest_url: &String) -> Result<String, CalculateDigestError> {
     let output = Command::new("crane")
-        .args(["digest", &digest_url])
+        .args(["digest", digest_url])
         .output()
         .map_err(|e| CalculateDigestError::CommandFailure(digest_url.clone(), e))?;
 
