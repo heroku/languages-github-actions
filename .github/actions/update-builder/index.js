@@ -5,7 +5,7 @@ require('../../bootstrap').invokeWith(({ getInput }) => {
         '--repository-path',
         getInput('repository_path', { required: true }),
 
-        '--builder_repository-path',
+        '--builder-repository-path',
         getInput('builder_repository_path', { required: true }),
 
         '--builders',
