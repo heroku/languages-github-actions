@@ -10,12 +10,14 @@ use std::path::PathBuf;
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Generates an aggregated changelist from all buildpacks within a project.", long_about = None, disable_version_flag = true)]
+#[command(author, version, about = "Generates a changelog from one or more buildpacks in a project", long_about = None, disable_version_flag = true)]
 pub(crate) struct GenerateChangelogArgs {
     #[arg(long, group = "section")]
     unreleased: bool,
     #[arg(long, group = "section")]
     version: Option<String>,
+    #[arg(long)]
+    path: Option<String>,
 }
 
 enum ChangelogEntryType {
@@ -24,10 +26,11 @@ enum ChangelogEntryType {
 }
 
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
-    let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
+    let working_dir =
+        get_working_dir_from(args.path.map(PathBuf::from)).map_err(Error::GetWorkingDir)?;
 
-    let buildpack_dirs = find_buildpack_dirs(&current_dir, &[current_dir.join("target")])
-        .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?;
+    let buildpack_dirs = find_buildpack_dirs(&working_dir, &[working_dir.join("target")])
+        .map_err(|e| Error::FindingBuildpacks(working_dir.clone(), e))?;
 
     let changelog_entry_type = match args.version {
         Some(version) => ChangelogEntryType::Version(version),
@@ -68,6 +71,20 @@ fn read_changelog_entry(
             .releases
             .get(version)
             .map(|entry| Some(entry.body.clone())),
+    })
+}
+
+fn get_working_dir_from(path: Option<PathBuf>) -> std::io::Result<PathBuf> {
+    let current_dir = std::env::current_dir()?;
+    Ok(match path {
+        Some(value) => {
+            if value.is_absolute() {
+                value
+            } else {
+                current_dir.join(value)
+            }
+        }
+        None => current_dir,
     })
 }
 

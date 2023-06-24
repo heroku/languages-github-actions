@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    GetCurrentDir(std::io::Error),
+    GetWorkingDir(std::io::Error),
     FindingBuildpacks(PathBuf, std::io::Error),
     GetBuildpackId(ReadBuildpackDataError),
     ReadingChangelog(PathBuf, std::io::Error),
@@ -17,8 +17,8 @@ pub(crate) enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::GetCurrentDir(error) => {
-                write!(f, "Failed to get current directory\nError: {error}")
+            Error::GetWorkingDir(error) => {
+                write!(f, "Failed to get working directory\nError: {error}")
             }
 
             Error::FindingBuildpacks(path, error) => {

@@ -8,5 +8,10 @@ require('../../bootstrap').invokeWith(({ getInput }) => {
         args.push(getInput('version'))
     }
 
+    if (getInput('path')) {
+        args.push('--path')
+        args.push(getInput('path'))
+    }
+
     return args
 })

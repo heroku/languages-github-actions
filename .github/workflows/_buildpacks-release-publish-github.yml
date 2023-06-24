@@ -1,12 +1,14 @@
-name: Publish → GitHub
-
 on:
   workflow_call:
     inputs:
-      buildpack_id:
+      buildpack_artifact_prefix:
         required: true
         type: string
-        description: The id of the buildpack to package
+        description: The prefix name to use for any generated buildpack artifacts
+      buildpack_version:
+        required: true
+        type: string
+        description: The version of the buildpack to package
 
 permissions:
   contents: write
@@ -17,14 +19,15 @@ jobs:
     runs-on: pub-hk-ubuntu-22.04-small
     steps:
       - name: Restore buildpack release artifacts
-        id: buildpack
+        id: artifacts
         uses: heroku/languages-github-actions/.github/actions/restore-buildpack-release@main
         with:
-          buildpack_id: ${{ inputs.buildpack_id }}
+          buildpack_artifact_prefix: ${{ inputs.buildpack_artifact_prefix }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.buildpack.outputs.buildpack_version }}
-          body_path: ${{ steps.buildpack.outputs.changes_file }}
-          files: ${{ steps.buildpack.outputs.cnb_file }}
+          tag_name: v${{ inputs.buildpack_version }}
+          body_path: ${{ steps.artifacts.outputs.changes_file }}
+          files: ${{ steps.artifacts.outputs.cnb_file }}
           fail_on_unmatched_files: true

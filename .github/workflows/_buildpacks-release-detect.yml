@@ -1,10 +1,11 @@
-name: Detect
-
 on:
   workflow_call:
     outputs:
+      version:
+        description: The version number that all buildpacks are set to
+        value: ${{ jobs.release-detect.outputs.version }}
       buildpacks:
-        description: An array of (id, path) entries for each detected buildpack in JSON format
+        description: The list of {buildpack_id, buildpack_version, buildpack_dir, buildpack_artifact_prefix, docker_repository} values for a buildpack formatted as a JSON array
         value: ${{ jobs.release-detect.outputs.buildpacks }}
 
 permissions:
@@ -12,10 +13,11 @@ permissions:
 
 jobs:
   release-detect:
-    name: Detect
+    name: Executing
     runs-on: ubuntu-latest
     outputs:
       buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
+      version: ${{ steps.generate-buildpack-matrix.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3

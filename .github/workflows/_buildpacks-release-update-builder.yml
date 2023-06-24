@@ -1,15 +1,17 @@
-name: Update Builder
-
 on:
   workflow_call:
     inputs:
       app_id:
-        description: "GitHub application ID"
+        description: Application ID of GitHub application (Linguist)
         type: string
         required: true
+      buildpack_version:
+        required: true
+        type: string
+        description: The version of the buildpacks that are being updated
     secrets:
       app_private_key:
-        description: "Private key of the GitHub application"
+        description: Private key of GitHub application (Linguist)
         required: true
 
 permissions:
@@ -35,6 +37,13 @@ jobs:
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@v5.2.0
 
+      - name: Generate Changelog
+        id: generate-changelog
+        uses: heroku/languages-github-actions/.github/actions/generate-changelog@main
+        with:
+          path: ./buildpacks
+          version: ${{ inputs.buildpack_version }}
+
       - name: Update Builder
         uses: heroku/languages-github-actions/.github/actions/update-builder@main
         with:
@@ -44,7 +53,7 @@ jobs:
             builder-22
             buildpacks-20
 
-      - name: Get token from GitHub application (Linguist)
+      - name: Get token for GitHub application (Linguist)
         uses: heroku/use-app-token-action@main
         id: generate-token
         with:
@@ -56,10 +65,10 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
-          title: Update ${{ github.repository }}
+          title: Update ${{ github.repository }} to v${{ inputs.buildpack_version }}
           path: ./builder
-          branch: update/${{ github.repository }}
-          body-path: ${{ steps.buildpack.outputs.changes_file }}
+          branch: update/${{ github.repository }}/${{ inputs.buildpack_version }}
+          body: ${{ steps.generate-changelog.outputs.changelog }}
 
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
