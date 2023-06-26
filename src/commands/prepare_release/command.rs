@@ -1,3 +1,4 @@
+use crate::buildpacks::find_releasable_buildpacks;
 use crate::changelog::{generate_release_declarations, Changelog, ReleaseEntry};
 use crate::commands::prepare_release::errors::Error;
 use crate::github::actions;
@@ -5,7 +6,6 @@ use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
 use indexmap::IndexMap;
 use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
-use libcnb_package::find_buildpack_dirs;
 use semver::Version;
 use std::collections::{HashMap, HashSet};
 use std::fs::write;
@@ -65,7 +65,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
         })
         .transpose()?;
 
-    let buildpack_dirs = find_buildpack_dirs(&current_dir, &[current_dir.join("target")])
+    let buildpack_dirs = find_releasable_buildpacks(&current_dir)
         .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?;
 
     if buildpack_dirs.is_empty() {

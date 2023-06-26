@@ -1,5 +1,6 @@
 use libcnb_data::buildpack::BuildpackDescriptor;
-use libcnb_package::GenericMetadata;
+use libcnb_package::{find_buildpack_dirs, GenericMetadata};
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
 #[derive(Debug)]
@@ -38,4 +39,13 @@ pub(crate) fn read_docker_repository_metadata(
         .and_then(|release| release.get("docker").and_then(|value| value.as_table()))
         .and_then(|docker| docker.get("repository").and_then(|value| value.as_str()))
         .map(|value| value.to_string())
+}
+
+pub(crate) fn find_releasable_buildpacks(starting_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    find_buildpack_dirs(starting_dir, &[starting_dir.join("target")]).map(|results| {
+        results
+            .into_iter()
+            .filter(|dir| dir.join("CHANGELOG.md").exists())
+            .collect()
+    })
 }
