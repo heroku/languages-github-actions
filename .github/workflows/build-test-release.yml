@@ -58,15 +58,45 @@ jobs:
       - name: Rebuild bootstrap script
         run: npm run build
       - name: Check bootstrap script for uncommitted changes
-        run: if [ -n "$(git status --porcelain)" ]; then exit 1; fi
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Compiled changes detected in .github/bootstrap/index.js.  Did you forget to `npm run build` and commit those changes?"
+            exit 1
+          fi
+
+  check-binary:
+    name: Check Binary
+    runs-on: ubuntu-latest
+    outputs:
+      needs_to_be_published: ${{ steps.check_binary_files.outputs.rust_files_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Check for binary file changes
+        id: check_binary_files
+        run: echo "rust_files_changed=$(git diff --name-only HEAD^ HEAD | grep -E '^(src|Cargo)' &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+      - name: Get Cargo Metadata
+        id: metadata
+        shell: bash
+        run: echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> $GITHUB_OUTPUT
+      - name: Check if tag has already been published
+        if: steps.check_binary_files.outputs.rust_files_changed == 'true'
+        run: |
+          if [[ "$(git ls-remote --exit-code --tags origin v${{ steps.metadata.outputs.version }} &> /dev/null && echo 'true' || echo 'false')" == "true" ]]; then
+            echo "An existing tag for v${{ steps.metadata.outputs.version }} already exists. Did you forget to bump the version in Cargo.toml?"
+            exit 1
+          fi
 
   release:
     name: Release / ${{ matrix.os }}
-    if: success() && github.ref == 'refs/heads/main'
+    if: success() && github.ref == 'refs/heads/main' && needs.check-binary.outputs.needs_to_be_published == 'true'
     needs:
       - lint
       - test
       - check-bootstrap
+      - check-binary
     strategy:
       matrix:
         os: [pub-hk-ubuntu-22.04-small]
@@ -84,8 +114,8 @@ jobs:
         id: metadata
         shell: bash
         run: |
-          echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> "$GITHUB_OUTPUT"
-          echo "name=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].targets[-1].name')" >> "$GITHUB_OUTPUT"
+          echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> $GITHUB_OUTPUT
+          echo "name=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
       - name: Bundle Release Asset
         id: asset
         shell: bash
@@ -114,7 +144,7 @@ jobs:
 
           if [ "$OS" = "windows-latest" ]; then tar --force-local -czf "$ASSET_PATH" -C "./target/release" "$NAME"; fi
 
-          echo "path=${ASSET_PATH}" >> "$GITHUB_OUTPUT"
+          echo "path=${ASSET_PATH}" >> $GITHUB_OUTPUT
       - name: Create Release
         uses: softprops/action-gh-release@v1
         env:
