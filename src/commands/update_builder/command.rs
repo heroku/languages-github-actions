@@ -6,6 +6,7 @@ use libcnb_package::{find_buildpack_dirs, read_buildpack_data};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::{value, Document};
+use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -110,6 +111,10 @@ fn update_builder_with_buildpack_info(
     buildpack_version: &BuildpackVersion,
     buildpack_uri_with_sha: &str,
 ) -> Result<()> {
+    if is_buildpack_using_cnb_shim(document, buildpack_id) {
+        return Ok(());
+    }
+
     document
         .get_mut("buildpacks")
         .and_then(|value| value.as_array_of_tables_mut())
@@ -150,6 +155,35 @@ fn update_builder_with_buildpack_info(
     }
 
     Ok(())
+}
+
+fn is_buildpack_using_cnb_shim(document: &Document, buildpack_id: &BuildpackId) -> bool {
+    document
+        .get("buildpacks")
+        .and_then(|value| value.as_array_of_tables())
+        .unwrap_or(&toml_edit::ArrayOfTables::default())
+        .iter()
+        .any(|buildpack| {
+            let matches_id = buildpack
+                .get("id")
+                .and_then(|item| item.as_str())
+                .filter(|value| value == &buildpack_id.as_str())
+                .is_some();
+
+            let uses_cnb_shim_url = buildpack
+                .get("uri")
+                .and_then(|item| item.as_str())
+                .into_iter()
+                .any(|uri| match URI::try_from(uri) {
+                    Ok(parsed_uri) => parsed_uri
+                        .host()
+                        .map(|host| host.to_string() == "cnb-shim.herokuapp.com")
+                        .unwrap_or(false),
+                    Err(_) => false,
+                });
+
+            matches_id && uses_cnb_shim_url
+        })
 }
 
 #[cfg(test)]
@@ -229,6 +263,43 @@ mod test {
     id = "heroku/procfile"
     version = "2.0.0"
     optional = true
+"#
+        )
+    }
+
+    #[test]
+    fn test_update_builder_contents_does_not_touch_cnb_shimmed_buildpacks() {
+        let toml = r#"
+[[buildpacks]]
+  id = "heroku/scala"
+  uri = "https://cnb-shim.herokuapp.com/v1/heroku/scala?version=0.0.0&name=Scala"
+
+[[order]]
+  [[order.group]]
+    id = "heroku/scala"
+    version = "0.0.0"
+"#;
+        let mut document = Document::from_str(toml).unwrap();
+
+        update_builder_with_buildpack_info(
+            &mut document,
+            &buildpack_id!("heroku/scala"),
+            &BuildpackVersion::try_from("1.1.1".to_string()).unwrap(),
+            "docker://docker.io/heroku/buildpack-scala@sha256:dd41aacd9ce11a11fdc3f0ba0bf4cd8a816fc56c634d30c2806998b5fce9534d",
+        )
+        .unwrap();
+
+        assert_eq!(
+            document.to_string(),
+            r#"
+[[buildpacks]]
+  id = "heroku/scala"
+  uri = "https://cnb-shim.herokuapp.com/v1/heroku/scala?version=0.0.0&name=Scala"
+
+[[order]]
+  [[order.group]]
+    id = "heroku/scala"
+    version = "0.0.0"
 "#
         )
     }
