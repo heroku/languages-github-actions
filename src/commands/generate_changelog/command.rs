@@ -1,9 +1,10 @@
+use crate::buildpacks::find_releasable_buildpacks;
 use crate::changelog::Changelog;
 use crate::commands::generate_changelog::errors::Error;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::BuildpackId;
-use libcnb_package::{find_buildpack_dirs, read_buildpack_data};
+use libcnb_package::read_buildpack_data;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
@@ -29,7 +30,7 @@ pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let working_dir =
         get_working_dir_from(args.path.map(PathBuf::from)).map_err(Error::GetWorkingDir)?;
 
-    let buildpack_dirs = find_buildpack_dirs(&working_dir, &[working_dir.join("target")])
+    let buildpack_dirs = find_releasable_buildpacks(&working_dir)
         .map_err(|e| Error::FindingBuildpacks(working_dir.clone(), e))?;
 
     let changelog_entry_type = match args.version {

@@ -1,8 +1,8 @@
-use crate::buildpacks::read_docker_repository_metadata;
+use crate::buildpacks::{find_releasable_buildpacks, read_docker_repository_metadata};
 use crate::commands::generate_buildpack_matrix::errors::Error;
 use crate::github::actions;
 use clap::Parser;
-use libcnb_package::{find_buildpack_dirs, read_buildpack_data, BuildpackData, GenericMetadata};
+use libcnb_package::{read_buildpack_data, BuildpackData, GenericMetadata};
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
@@ -15,7 +15,7 @@ pub(crate) struct GenerateBuildpackMatrixArgs;
 pub(crate) fn execute(_: GenerateBuildpackMatrixArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
 
-    let buildpack_dirs = find_buildpack_dirs(&current_dir, &[current_dir.join("target")])
+    let buildpack_dirs = find_releasable_buildpacks(&current_dir)
         .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?;
 
     let buildpacks = buildpack_dirs

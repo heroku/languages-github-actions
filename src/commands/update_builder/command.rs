@@ -1,8 +1,10 @@
-use crate::buildpacks::{calculate_digest, read_docker_repository_metadata};
+use crate::buildpacks::{
+    calculate_digest, find_releasable_buildpacks, read_docker_repository_metadata,
+};
 use crate::update_builder::errors::Error;
 use clap::Parser;
 use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
-use libcnb_package::{find_buildpack_dirs, read_buildpack_data};
+use libcnb_package::read_buildpack_data;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::{value, Document};
@@ -32,7 +34,7 @@ pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
     let builder_repository_path =
         resolve_path(PathBuf::from(args.builder_repository_path), &current_dir);
 
-    let buildpacks = find_buildpack_dirs(&repository_path, &[repository_path.join("target")])
+    let buildpacks = find_releasable_buildpacks(&repository_path)
         .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?
         .into_iter()
         .map(|dir| read_buildpack_data(dir).map_err(Error::ReadingBuildpackData))
