@@ -1,5 +1,4 @@
-use crate::buildpack_info::CalculateDigestError;
-use crate::commands::update_builder::command::UpdateBuilderError;
+use crate::buildpacks::CalculateDigestError;
 use libcnb_package::ReadBuildpackDataError;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -8,12 +7,14 @@ use std::path::PathBuf;
 pub(crate) enum Error {
     GetCurrentDir(std::io::Error),
     FindingBuildpacks(PathBuf, std::io::Error),
-    ReadingBuildpackData(libcnb_package::ReadBuildpackDataError),
+    ReadingBuildpackData(ReadBuildpackDataError),
     NoBuildpacks(PathBuf),
     ReadingBuilder(PathBuf, std::io::Error),
     ParsingBuilder(PathBuf, toml_edit::TomlError),
     NoBuilderFiles(Vec<String>),
-    UpdatingBuilder(PathBuf, UpdateBuilderError),
+    MissingDockerRepositoryMetadata(PathBuf),
+    CalculatingDigest(PathBuf, CalculateDigestError),
+    BuilderMissingRequiredKey(String),
     WritingBuilder(PathBuf, std::io::Error),
 }
 
@@ -94,42 +95,36 @@ impl Display for Error {
                 )
             }
 
-            Error::UpdatingBuilder(path, update_error) => match update_error {
-                UpdateBuilderError::BuilderMissingRequiredKey(key) => {
-                    write!(
-                        f,
-                        "Missing required key `{key}` in builder\nPath: {}",
-                        path.display()
-                    )
-                }
+            Error::BuilderMissingRequiredKey(key) => {
+                write!(f, "Missing required key `{key}` in builder",)
+            }
 
-                UpdateBuilderError::MissingDockerRepositoryMetadata(buildpack_path) => {
-                    write!(
-                        f,
-                        "The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}",
-                        buildpack_path.display()
-                    )
-                }
+            Error::MissingDockerRepositoryMetadata(buildpack_path) => {
+                write!(
+                    f,
+                    "The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}",
+                    buildpack_path.display()
+                )
+            }
 
-                UpdateBuilderError::CalculatingDigest(buildpack_path, calculate_digest_error) => {
-                    match calculate_digest_error {
-                        CalculateDigestError::CommandFailure(digest_url, error) => {
-                            write!(
-                                f,
-                                "Failed to execute crane digest {digest_url}\nPath: {}\nError: {error}",
-                                buildpack_path.display()
-                            )
-                        }
+            Error::CalculatingDigest(buildpack_path, calculate_digest_error) => {
+                match calculate_digest_error {
+                    CalculateDigestError::CommandFailure(digest_url, error) => {
+                        write!(
+                            f,
+                            "Failed to execute crane digest {digest_url}\nPath: {}\nError: {error}",
+                            buildpack_path.display()
+                        )
+                    }
 
-                        CalculateDigestError::ExitStatus(digest_url, status) => {
-                            write!(
-                                f,
-                                "Command crane digest {digest_url} exited with a non-zero status\nStatus: {status}",
-                            )
-                        }
+                    CalculateDigestError::ExitStatus(digest_url, status) => {
+                        write!(
+                            f,
+                            "Command crane digest {digest_url} exited with a non-zero status\nStatus: {status}",
+                        )
                     }
                 }
-            },
+            }
         }
     }
 }

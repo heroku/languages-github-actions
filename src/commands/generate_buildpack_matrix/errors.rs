@@ -1,5 +1,6 @@
 use crate::github::actions::SetOutputError;
 use libcnb_package::ReadBuildpackDataError;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
@@ -8,7 +9,9 @@ pub(crate) enum Error {
     GetCurrentDir(std::io::Error),
     FindingBuildpacks(PathBuf, std::io::Error),
     ReadingBuildpackData(ReadBuildpackDataError),
+    MissingDockerRepositoryMetadata(PathBuf),
     SerializingJson(serde_json::Error),
+    FixedVersion(HashSet<String>),
     SetActionOutput(SetOutputError),
 }
 
@@ -56,6 +59,26 @@ impl Display for Error {
                     )
                 }
             },
+
+            Error::MissingDockerRepositoryMetadata(path) => {
+                write!(
+                    f,
+                    "The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}",
+                    path.display()
+                )
+            }
+
+            Error::FixedVersion(version) => {
+                write!(
+                    f,
+                    "Expected all buildpacks to have the same version but multiple versions were found:\n{}",
+                    version
+                        .iter()
+                        .map(|version| format!("• {version}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            }
         }
     }
 }

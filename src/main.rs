@@ -7,7 +7,7 @@ use crate::commands::{
 };
 use clap::Parser;
 
-mod buildpack_info;
+mod buildpacks;
 mod changelog;
 mod commands;
 mod github;

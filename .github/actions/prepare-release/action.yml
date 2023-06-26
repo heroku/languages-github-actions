@@ -1,5 +1,5 @@
 name: Prepare Buildpack Release
-description: "Prepares a buildpack release by bumping the fixed version and updating changelogs"
+description: Prepares a buildpack release by bumping the fixed version and updating changelogs
 
 inputs:
   bump:
@@ -10,7 +10,7 @@ inputs:
     default: https://github.com/${{ github.repository }}
     required: false
   declarations_starting_version:
-    description: When generating markdown declarations for each release, what version should be the start
+    description: When generating markdown declarations for each release, what version should be the start?
     required: false
 
 outputs:
