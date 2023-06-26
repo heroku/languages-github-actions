@@ -2,6 +2,23 @@
 
 A set of custom GitHub Actions and reusable workflow used by the Languages Team.
 
+- [Workflows](#workflows)
+  - [Buildpacks - Prepare Release](#buildpacks---prepare-release)
+  - [Buildpacks Release - Detect](#buildpacks-release---detect)
+  - [Buildpacks Release - Package](#buildpacks-release---package)
+  - [Buildpacks Release - Publish to Docker](#buildpacks-release---publish-to-docker)
+  - [Buildpacks Release - Publish to CNB Registry](#buildpacks-release---publish-to-cnb-registry)
+  - [Buildpacks Release - Publish to GitHub](#buildpacks-release---publish-to-github)
+  - [Buildpacks Release - Update Builder](#buildpacks-release---update-builder)
+- [Actions](#actions)
+  - [Generate Buildpack Matrix](#generate-buildpack-matrix)
+  - [Generate Changelog](#generate-changelog)
+  - [Prepare Release](#prepare-release)
+  - [Restore Buildpack Release](#restore-buildpack-release)
+  - [Save Buildpack Release](#save-buildpack-release)
+  - [Update Builder](#update-builder)
+- [Development](#development)
+
 ## Workflows
 
 ### Buildpacks - Prepare Release
