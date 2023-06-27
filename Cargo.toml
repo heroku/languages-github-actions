@@ -23,7 +23,7 @@ clap = { version = "4.3.8", default-features = false, features = [
     "std",
     "usage",
 ] }
-indexmap = "1.9.3"
+indexmap = "2.0.0"
 lazy_static = "1.4.0"
 libcnb-data = "0.13.0"
 libcnb-package = "0.13.0"

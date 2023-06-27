@@ -297,7 +297,7 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "clap",
- "indexmap 1.9.3",
+ "indexmap 2.0.0",
  "lazy_static",
  "libcnb-data",
  "libcnb-package",
