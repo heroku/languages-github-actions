@@ -46,7 +46,7 @@ impl TryFrom<&str> for Changelog {
                         Ordering::Less => {
                             current_header = None;
                         }
-                        _ => {
+                        Ordering::Greater => {
                             if let Some(header) = &current_header {
                                 let body_nodes = body_nodes_by_header
                                     .entry(header.clone())
@@ -115,8 +115,8 @@ impl TryFrom<&str> for Changelog {
                         version.to_string(),
                         ReleaseEntry {
                             version,
-                            body,
                             date,
+                            body,
                         },
                     );
                 }
@@ -254,7 +254,7 @@ pub(crate) fn generate_release_declarations<S: Into<String>>(
                 "[{version}]: {repository}/compare/v{next_version}...v{version}"
             ));
         }
-        previous_version = Some(next_version)
+        previous_version = Some(next_version);
     }
 
     if let Some(version) = previous_version {
@@ -268,7 +268,7 @@ pub(crate) fn generate_release_declarations<S: Into<String>>(
 mod test {
     use crate::changelog::{generate_release_declarations, Changelog};
     use chrono::{TimeZone, Utc};
-    use semver::Version;
+    use semver::{BuildMetadata, Prerelease, Version};
 
     #[test]
     fn test_keep_a_changelog_unreleased_entry_with_changes_parsing() {
@@ -318,7 +318,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated function runtime to 1.0.3
 "
-        )
+        );
     }
 
     #[test]
@@ -482,8 +482,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
                 major: 1,
                 minor: 0,
                 patch: 0,
-                pre: Default::default(),
-                build: Default::default(),
+                pre: Prerelease::default(),
+                build: BuildMetadata::default(),
             }),
         );
         assert_eq!(

@@ -45,7 +45,7 @@ pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
                 .map_err(Error::GetBuildpackId)
                 .map(|data| data.buildpack_descriptor.buildpack().id.clone())
                 .and_then(|buildpack_id| {
-                    read_changelog_entry(dir.join("CHANGELOG.md"), &changelog_entry_type)
+                    read_changelog_entry(&dir.join("CHANGELOG.md"), &changelog_entry_type)
                         .map(|contents| (buildpack_id, contents))
                 })
         })
@@ -58,12 +58,13 @@ pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::option_option)]
 fn read_changelog_entry(
-    path: PathBuf,
+    path: &PathBuf,
     changelog_entry_type: &ChangelogEntryType,
 ) -> Result<Option<Option<String>>> {
     let contents =
-        std::fs::read_to_string(&path).map_err(|e| Error::ReadingChangelog(path.clone(), e))?;
+        std::fs::read_to_string(path).map_err(|e| Error::ReadingChangelog(path.clone(), e))?;
     let changelog = Changelog::try_from(contents.as_str())
         .map_err(|e| Error::ParsingChangelog(path.clone(), e))?;
     Ok(match changelog_entry_type {
@@ -89,6 +90,7 @@ fn get_working_dir_from(path: Option<PathBuf>) -> std::io::Result<PathBuf> {
     })
 }
 
+#[allow(clippy::option_option)]
 fn generate_changelog(
     changes_by_buildpack: &HashMap<BuildpackId, Option<Option<String>>>,
 ) -> String {
@@ -142,6 +144,6 @@ mod test {
 - No changes
 
 "#
-        )
+        );
     }
 }

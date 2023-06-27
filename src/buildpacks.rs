@@ -33,6 +33,7 @@ pub(crate) fn read_docker_repository_metadata(
         BuildpackDescriptor::Meta(descriptor) => &descriptor.metadata,
     };
 
+    #[allow(clippy::redundant_closure_for_method_calls)]
     metadata
         .as_ref()
         .and_then(|metadata| metadata.get("release").and_then(|value| value.as_table()))

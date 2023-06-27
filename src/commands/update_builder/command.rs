@@ -7,7 +7,7 @@ use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
 use libcnb_package::read_buildpack_data;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use toml_edit::{value, Document};
+use toml_edit::{value, ArrayOfTables, Document, Item};
 use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -119,13 +119,13 @@ fn update_builder_with_buildpack_info(
 
     document
         .get_mut("buildpacks")
-        .and_then(|value| value.as_array_of_tables_mut())
-        .unwrap_or(&mut toml_edit::ArrayOfTables::default())
+        .and_then(Item::as_array_of_tables_mut)
+        .unwrap_or(&mut ArrayOfTables::default())
         .iter_mut()
         .for_each(|buildpack| {
             let matches_id = buildpack
                 .get("id")
-                .and_then(|item| item.as_str())
+                .and_then(Item::as_str)
                 .filter(|value| value == &buildpack_id.as_str())
                 .is_some();
             if matches_id {
@@ -135,19 +135,19 @@ fn update_builder_with_buildpack_info(
 
     let order_list = document
         .get_mut("order")
-        .and_then(|value| value.as_array_of_tables_mut())
+        .and_then(Item::as_array_of_tables_mut)
         .ok_or(Error::BuilderMissingRequiredKey("order".to_string()))?;
 
     for order in order_list.iter_mut() {
         let group_list = order
             .get_mut("group")
-            .and_then(|value| value.as_array_of_tables_mut())
+            .and_then(Item::as_array_of_tables_mut)
             .ok_or(Error::BuilderMissingRequiredKey("group".to_string()))?;
 
         for group in group_list.iter_mut() {
             let matches_id = group
                 .get("id")
-                .and_then(|item| item.as_str())
+                .and_then(Item::as_str)
                 .filter(|value| value == &buildpack_id.as_str())
                 .is_some();
             if matches_id {
@@ -162,27 +162,27 @@ fn update_builder_with_buildpack_info(
 fn is_buildpack_using_cnb_shim(document: &Document, buildpack_id: &BuildpackId) -> bool {
     document
         .get("buildpacks")
-        .and_then(|value| value.as_array_of_tables())
-        .unwrap_or(&toml_edit::ArrayOfTables::default())
+        .and_then(Item::as_array_of_tables)
+        .unwrap_or(&ArrayOfTables::default())
         .iter()
         .any(|buildpack| {
             let matches_id = buildpack
                 .get("id")
-                .and_then(|item| item.as_str())
+                .and_then(Item::as_str)
                 .filter(|value| value == &buildpack_id.as_str())
                 .is_some();
 
-            let uses_cnb_shim_url = buildpack
-                .get("uri")
-                .and_then(|item| item.as_str())
-                .into_iter()
-                .any(|uri| match URI::try_from(uri) {
-                    Ok(parsed_uri) => parsed_uri
-                        .host()
-                        .map(|host| host.to_string() == "cnb-shim.herokuapp.com")
-                        .unwrap_or(false),
-                    Err(_) => false,
-                });
+            let uses_cnb_shim_url =
+                buildpack
+                    .get("uri")
+                    .and_then(Item::as_str)
+                    .into_iter()
+                    .any(|uri| match URI::try_from(uri) {
+                        Ok(parsed_uri) => parsed_uri
+                            .host()
+                            .map_or(false, |host| host.to_string() == "cnb-shim.herokuapp.com"),
+                        Err(_) => false,
+                    });
 
             matches_id && uses_cnb_shim_url
         })
@@ -266,7 +266,7 @@ mod test {
     version = "2.0.0"
     optional = true
 "#
-        )
+        );
     }
 
     #[test]
@@ -303,6 +303,6 @@ mod test {
     id = "heroku/scala"
     version = "0.0.0"
 "#
-        )
+        );
     }
 }

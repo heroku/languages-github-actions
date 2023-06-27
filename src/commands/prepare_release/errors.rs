@@ -28,27 +28,24 @@ pub(crate) enum Error {
 }
 
 impl Display for Error {
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::GetCurrentDir(error) => {
                 write!(f, "Failed to get current directory\nError: {error}")
             }
-
             Error::InvalidRepositoryUrl(value, error) => {
                 write!(
                     f,
                     "Invalid URL `{value}` for argument --repository-url\nError: {error}"
                 )
             }
-
             Error::InvalidDeclarationsStartingVersion(value, error) => {
                 write!(f, "Invalid Version `{value}` for argument --declarations-starting-version\nError: {error}")
             }
-
             Error::NoBuildpacksFound(path) => {
                 write!(f, "No buildpacks found under {}", path.display())
             }
-
             Error::NotAllVersionsMatch(version_map) => {
                 write!(
                     f,
@@ -60,11 +57,9 @@ impl Display for Error {
                         .join("\n")
                 )
             }
-
             Error::NoFixedVersion => {
                 write!(f, "No fixed version could be determined")
             }
-
             Error::FindingBuildpacks(path, error) => {
                 write!(
                     f,
@@ -86,7 +81,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::WritingBuildpack(path, error) => {
                 write!(
                     f,
@@ -94,7 +88,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::ReadingChangelog(path, error) => {
                 write!(
                     f,
@@ -102,7 +95,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::ParsingChangelog(path, error) => {
                 write!(
                     f,
@@ -110,7 +102,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::WritingChangelog(path, error) => {
                 write!(
                     f,
@@ -118,13 +109,11 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::SetActionOutput(set_output_error) => match set_output_error {
                 SetOutputError::Opening(error) | SetOutputError::Writing(error) => {
                     write!(f, "Could not write action output\nError: {error}")
                 }
             },
-
             Error::MissingRequiredField(path, field) => {
                 write!(
                     f,
@@ -132,7 +121,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::InvalidBuildpackId(path, id) => {
                 write!(
                     f,
@@ -140,7 +128,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-
             Error::InvalidBuildpackVersion(path, version) => {
                 write!(
                     f,
