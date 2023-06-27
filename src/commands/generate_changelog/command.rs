@@ -58,6 +58,7 @@ pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::option_option)]
 fn read_changelog_entry(
     path: &PathBuf,
     changelog_entry_type: &ChangelogEntryType,
@@ -89,6 +90,7 @@ fn get_working_dir_from(path: Option<PathBuf>) -> std::io::Result<PathBuf> {
     })
 }
 
+#[allow(clippy::option_option)]
 fn generate_changelog(
     changes_by_buildpack: &HashMap<BuildpackId, Option<Option<String>>>,
 ) -> String {
