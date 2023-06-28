@@ -16,14 +16,14 @@ strip = true
 
 [dependencies]
 chrono = "0.4.26"
-clap = { version = "4.3.5", default-features = false, features = [
+clap = { version = "4.3.8", default-features = false, features = [
     "derive",
     "error-context",
     "help",
     "std",
     "usage",
 ] }
-indexmap = "1.9.3"
+indexmap = "2.0.0"
 lazy_static = "1.4.0"
 libcnb-data = "0.13.0"
 libcnb-package = "0.13.0"
@@ -31,9 +31,8 @@ markdown = "1.0.0-alpha.10"
 rand = "0.8.5"
 regex = "1.8.3"
 semver = "1.0.17"
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = "1.0.97"
-toml_edit = "0.19.10"
+serde_json = "1.0.99"
+toml_edit = "0.19.11"
 uriparse = "0.6.4"
 
 [dev-dependencies]

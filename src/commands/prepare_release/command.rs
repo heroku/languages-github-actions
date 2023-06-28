@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
 use indexmap::IndexMap;
 use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
-use semver::Version;
+use semver::{BuildMetadata, Prerelease, Version};
 use std::collections::{HashMap, HashSet};
 use std::fs::write;
 use std::path::{Path, PathBuf};
@@ -51,7 +51,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
         .repository_url
         .map(|url| {
             URI::try_from(url.as_str())
-                .map(|uri| uri.into_owned())
+                .map(uriparse::URI::into_owned)
                 .map_err(|e| Error::InvalidRepositoryUrl(url.clone(), e))
         })
         .transpose()?;
@@ -89,7 +89,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
 
     let current_version = get_fixed_version(&buildpack_files)?;
 
-    let next_version = get_next_version(&current_version, args.bump);
+    let next_version = get_next_version(&current_version, &args.bump);
 
     for (mut buildpack_file, changelog_file) in buildpack_files.into_iter().zip(changelog_files) {
         let updated_dependencies = get_buildpack_dependency_ids(&buildpack_file)?
@@ -166,9 +166,9 @@ fn get_buildpack_id(buildpack_file: &BuildpackFile) -> Result<BuildpackId> {
     let buildpack_id = buildpack_file
         .document
         .get("buildpack")
-        .and_then(|value| value.as_table_like())
+        .and_then(toml_edit::Item::as_table_like)
         .and_then(|buildpack| buildpack.get("id"))
-        .and_then(|id| id.as_str().map(|v| v.to_string()))
+        .and_then(|id| id.as_str().map(std::string::ToString::to_string))
         .ok_or(Error::MissingRequiredField(
             buildpack_file.path.clone(),
             "buildpack.id".to_string(),
@@ -182,9 +182,9 @@ fn get_buildpack_version(buildpack_file: &BuildpackFile) -> Result<BuildpackVers
     let version = buildpack_file
         .document
         .get("buildpack")
-        .and_then(|value| value.as_table_like())
+        .and_then(toml_edit::Item::as_table_like)
         .and_then(|buildpack| buildpack.get("version"))
-        .and_then(|version| version.as_str().map(|v| v.to_string()))
+        .and_then(|version| version.as_str().map(std::string::ToString::to_string))
         .ok_or(Error::MissingRequiredField(
             buildpack_file.path.clone(),
             "buildpack.version".to_string(),
@@ -197,13 +197,13 @@ fn get_buildpack_dependency_ids(buildpack_file: &BuildpackFile) -> Result<Vec<Bu
     buildpack_file
         .document
         .get("order")
-        .and_then(|value| value.as_array_of_tables())
+        .and_then(toml_edit::Item::as_array_of_tables)
         .unwrap_or(&ArrayOfTables::default())
         .iter()
         .flat_map(|order| {
             order
                 .get("group")
-                .and_then(|value| value.as_array_of_tables())
+                .and_then(toml_edit::Item::as_array_of_tables)
                 .unwrap_or(&ArrayOfTables::default())
                 .iter()
                 .map(|group| get_group_buildpack_id(group, &buildpack_file.path))
@@ -215,7 +215,7 @@ fn get_buildpack_dependency_ids(buildpack_file: &BuildpackFile) -> Result<Vec<Bu
 fn get_group_buildpack_id(group: &Table, path: &Path) -> Result<BuildpackId> {
     group
         .get("id")
-        .and_then(|id| id.as_str())
+        .and_then(toml_edit::Item::as_str)
         .ok_or(Error::MissingRequiredField(
             path.to_path_buf(),
             "order[].group[].id".to_string(),
@@ -237,7 +237,7 @@ fn get_fixed_version(buildpack_files: &[BuildpackFile]) -> Result<BuildpackVersi
 
     let versions = version_map
         .values()
-        .map(|version| version.to_string())
+        .map(std::string::ToString::to_string)
         .collect::<HashSet<_>>();
 
     if versions.len() != 1 {
@@ -251,7 +251,7 @@ fn get_fixed_version(buildpack_files: &[BuildpackFile]) -> Result<BuildpackVersi
         .ok_or(Error::NoFixedVersion)
 }
 
-fn get_next_version(current_version: &BuildpackVersion, bump: BumpCoordinate) -> BuildpackVersion {
+fn get_next_version(current_version: &BuildpackVersion, bump: &BumpCoordinate) -> BuildpackVersion {
     let BuildpackVersion {
         major,
         minor,
@@ -285,7 +285,7 @@ fn update_buildpack_contents_with_new_version(
     let buildpack = buildpack_file
         .document
         .get_mut("buildpack")
-        .and_then(|value| value.as_table_like_mut())
+        .and_then(toml_edit::Item::as_table_like_mut)
         .ok_or(Error::MissingRequiredField(
             buildpack_file.path.clone(),
             "buildpack".to_string(),
@@ -299,12 +299,12 @@ fn update_buildpack_contents_with_new_version(
     let orders = buildpack_file
         .document
         .get_mut("order")
-        .and_then(|value| value.as_array_of_tables_mut())
+        .and_then(toml_edit::Item::as_array_of_tables_mut)
         .unwrap_or(&mut empty_orders);
     for order in orders.iter_mut() {
         let groups = order
             .get_mut("group")
-            .and_then(|value| value.as_array_of_tables_mut())
+            .and_then(toml_edit::Item::as_array_of_tables_mut)
             .unwrap_or(&mut empty_groups);
         for group in groups.iter_mut() {
             let buildpack_id = get_group_buildpack_id(group, &buildpack_file.path)?;
@@ -352,8 +352,8 @@ fn promote_changelog_unreleased_to_version(
             major: version.major,
             minor: version.minor,
             patch: version.patch,
-            pre: Default::default(),
-            build: Default::default(),
+            pre: Prerelease::default(),
+            build: BuildMetadata::default(),
         },
         date: *date,
         body,
@@ -410,7 +410,7 @@ version = "0.0.0"
                 minor: 0,
                 patch: 0
             }
-        )
+        );
     }
 
     #[test]
