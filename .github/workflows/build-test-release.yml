@@ -67,9 +67,14 @@ jobs:
   check-tag:
     name: Check Tag
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Get Cargo Metadata
+        id: metadata
+        shell: bash
+        run: echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> $GITHUB_OUTPUT
       - name: Check if tag has already been published
         run: |
           if [[ "$(git ls-remote --exit-code --tags origin v${{ steps.metadata.outputs.version }} &> /dev/null && echo 'true' || echo 'false')" == "true" ]]; then
