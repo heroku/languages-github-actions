@@ -65,7 +65,7 @@ jobs:
           fi
 
   check-tag:
-    name: Check Binary
+    name: Check Tag
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
