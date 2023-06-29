@@ -26,6 +26,12 @@ enum ChangelogEntryType {
     Version(String),
 }
 
+enum ChangelogEntry {
+    VersionNotPresent,
+    Empty,
+    Changes(String),
+}
+
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let working_dir =
         get_working_dir_from(args.path.map(PathBuf::from)).map_err(Error::GetWorkingDir)?;
@@ -58,21 +64,31 @@ pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::option_option)]
 fn read_changelog_entry(
     path: &PathBuf,
     changelog_entry_type: &ChangelogEntryType,
-) -> Result<Option<Option<String>>> {
+) -> Result<ChangelogEntry> {
     let contents =
         std::fs::read_to_string(path).map_err(|e| Error::ReadingChangelog(path.clone(), e))?;
     let changelog = Changelog::try_from(contents.as_str())
         .map_err(|e| Error::ParsingChangelog(path.clone(), e))?;
     Ok(match changelog_entry_type {
-        ChangelogEntryType::Unreleased => Some(changelog.unreleased),
-        ChangelogEntryType::Version(version) => changelog
-            .releases
-            .get(version)
-            .map(|entry| Some(entry.body.clone())),
+        ChangelogEntryType::Unreleased => changelog
+            .unreleased
+            .map_or(ChangelogEntry::Empty, ChangelogEntry::Changes),
+
+        ChangelogEntryType::Version(version) => {
+            changelog
+                .releases
+                .get(version)
+                .map_or(ChangelogEntry::VersionNotPresent, |entry| {
+                    if entry.body.is_empty() {
+                        ChangelogEntry::Empty
+                    } else {
+                        ChangelogEntry::Changes(entry.body.clone())
+                    }
+                })
+        }
     })
 }
 
@@ -90,20 +106,16 @@ fn get_working_dir_from(path: Option<PathBuf>) -> std::io::Result<PathBuf> {
     })
 }
 
-#[allow(clippy::option_option)]
-fn generate_changelog(
-    changes_by_buildpack: &HashMap<BuildpackId, Option<Option<String>>>,
-) -> String {
+fn generate_changelog(changes_by_buildpack: &HashMap<BuildpackId, ChangelogEntry>) -> String {
     let changelog = changes_by_buildpack
         .iter()
         .map(|(buildpack_id, changes)| (buildpack_id.to_string(), changes))
         .collect::<BTreeMap<_, _>>()
         .into_iter()
-        .filter_map(|(buildpack_id, changes)| {
-            changes.as_ref().map(|contents| match contents {
-                Some(value) => format!("# {buildpack_id}\n\n{value}"),
-                None => format!("# {buildpack_id}\n\n- No changes"),
-            })
+        .filter_map(|(buildpack_id, changes)| match changes {
+            ChangelogEntry::Empty => Some(format!("# {buildpack_id}\n\n- No changes")),
+            ChangelogEntry::Changes(value) => Some(format!("# {buildpack_id}\n\n{value}")),
+            ChangelogEntry::VersionNotPresent => None,
         })
         .collect::<Vec<_>>()
         .join("\n\n");
@@ -112,20 +124,23 @@ fn generate_changelog(
 
 #[cfg(test)]
 mod test {
-    use crate::commands::generate_changelog::command::generate_changelog;
+    use crate::commands::generate_changelog::command::{generate_changelog, ChangelogEntry};
     use libcnb_data::buildpack_id;
     use std::collections::HashMap;
 
     #[test]
     fn test_generating_changelog() {
         let values = HashMap::from([
-            (buildpack_id!("c"), Some(Some("- change c.1".to_string()))),
+            (
+                buildpack_id!("c"),
+                ChangelogEntry::Changes("- change c.1".to_string()),
+            ),
             (
                 buildpack_id!("a"),
-                Some(Some("- change a.1\n- change a.2".to_string())),
+                ChangelogEntry::Changes("- change a.1\n- change a.2".to_string()),
             ),
-            (buildpack_id!("b"), None),
-            (buildpack_id!("d"), Some(None)),
+            (buildpack_id!("b"), ChangelogEntry::VersionNotPresent),
+            (buildpack_id!("d"), ChangelogEntry::Empty),
         ]);
 
         assert_eq!(
