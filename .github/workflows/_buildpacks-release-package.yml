@@ -46,6 +46,8 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ inputs.buildpack_id }}-v${{ inputs.buildpack_version }}
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.2.0
