@@ -50,9 +50,6 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.2.0
 
-      - name: Install yj
-        uses: buildpacks/github-actions/setup-tools@v5.2.0
-
       - name: Install libcnb-cargo
         run: cargo install libcnb-cargo
 
