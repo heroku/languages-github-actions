@@ -16,7 +16,7 @@ strip = true
 
 [dependencies]
 chrono = "0.4.26"
-clap = { version = "4.3.8", default-features = false, features = [
+clap = { version = "4.3.10", default-features = false, features = [
     "derive",
     "error-context",
     "help",
