@@ -23,10 +23,11 @@ runs:
     - name: Restore cached assets
       uses: actions/cache/restore@v3
       with:
+        fail-on-cache-miss: true
         key: ${{ github.run_id }}-${{ inputs.buildpack_artifact_prefix }}
         path: |
           ${{ inputs.buildpack_artifact_prefix }}.cnb
           ${{ inputs.buildpack_artifact_prefix }}.tar.zst
           ${{ inputs.buildpack_artifact_prefix }}.changes
-
-
+      env:
+        SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
