@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@v5.2.0
+        uses: buildpacks/github-actions/setup-tools@v5.3.0
 
       - name: Check if version is already in the registry
         id: check
