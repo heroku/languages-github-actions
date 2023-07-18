@@ -35,7 +35,7 @@ jobs:
           path: ./builder
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@v5.2.0
+        uses: buildpacks/github-actions/setup-tools@v5.3.0
 
       - name: Generate Changelog
         id: generate-changelog
