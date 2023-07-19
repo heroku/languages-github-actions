@@ -66,6 +66,7 @@ jobs:
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
           title: Update ${{ github.repository }} to v${{ inputs.buildpack_version }}
+          commit-message: Update ${{ github.repository }} to v${{ inputs.buildpack_version }}
           path: ./builder
           branch: update/${{ github.repository }}/${{ inputs.buildpack_version }}
           body: ${{ steps.generate-changelog.outputs.changelog }}
