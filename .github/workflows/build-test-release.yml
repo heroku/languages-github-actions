@@ -21,7 +21,7 @@ jobs:
       - name: Update Rust toolchain
         run: rustup update
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.5.1
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- --deny warnings
       - name: rustfmt
@@ -38,7 +38,7 @@ jobs:
       - name: Update Rust toolchain
         run: rustup update
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.5.1
       - name: Test
         run: cargo test --all-features
 
@@ -77,7 +77,7 @@ jobs:
       - name: Update Rust toolchain
         run: rustup update
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.5.1
       - name: Build
         run: cargo build --release
       - name: Get Cargo Metadata
@@ -116,7 +116,7 @@ jobs:
 
           echo "path=${ASSET_PATH}" >> "$GITHUB_OUTPUT"
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v0.1.15
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
