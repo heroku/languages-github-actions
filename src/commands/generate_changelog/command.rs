@@ -113,8 +113,8 @@ fn generate_changelog(changes_by_buildpack: &HashMap<BuildpackId, ChangelogEntry
         .collect::<BTreeMap<_, _>>()
         .into_iter()
         .filter_map(|(buildpack_id, changes)| match changes {
-            ChangelogEntry::Empty => Some(format!("# {buildpack_id}\n\n- No changes")),
-            ChangelogEntry::Changes(value) => Some(format!("# {buildpack_id}\n\n{value}")),
+            ChangelogEntry::Empty => Some(format!("## {buildpack_id}\n\n- No changes.")),
+            ChangelogEntry::Changes(value) => Some(format!("## {buildpack_id}\n\n{value}")),
             ChangelogEntry::VersionNotPresent => None,
         })
         .collect::<Vec<_>>()
@@ -145,18 +145,18 @@ mod test {
 
         assert_eq!(
             generate_changelog(&values),
-            r#"# a
+            r#"## a
 
 - change a.1
 - change a.2
 
-# c
+## c
 
 - change c.1
 
-# d
+## d
 
-- No changes
+- No changes.
 
 "#
         );
