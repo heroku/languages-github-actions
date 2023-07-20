@@ -26,8 +26,8 @@ jobs:
         uses: heroku/use-app-token-action@main
         id: generate-token
         with:
-          app_id: ${{ inputs.app_id }}
-          private_key: ${{ secrets.app_private_key }}
+          app_id: ${{ vars.LINGUIST_GH_APP_ID }}
+          private_key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
 
       - name: Checkout
         uses: actions/checkout@v3
