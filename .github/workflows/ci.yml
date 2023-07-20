@@ -20,7 +20,7 @@ jobs:
         run: rustup update
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.5.1
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- --deny warnings
@@ -42,7 +42,7 @@ jobs:
         run: rustup update
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.5.1
 
       - name: Test
         run: cargo test --all-features
