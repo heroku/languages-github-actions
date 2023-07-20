@@ -329,7 +329,7 @@ fn promote_changelog_unreleased_to_version(
         Some(
             updated_dependencies
                 .iter()
-                .map(|id| format!("- Updated `{id}` to `{version}`"))
+                .map(|id| format!("- Updated `{id}` to `{version}`."))
                 .collect::<Vec<_>>()
                 .join("\n"),
         )
@@ -344,7 +344,7 @@ fn promote_changelog_unreleased_to_version(
     } else if let (None, Some(dependencies)) = changes_with_dependencies {
         dependencies.clone()
     } else {
-        "- No changes".to_string()
+        "- No changes.".to_string()
     };
 
     let new_release_entry = ReleaseEntry {
@@ -636,7 +636,7 @@ optional = true
             Some(&ReleaseEntry {
                 version: "0.8.17".parse::<Version>().unwrap(),
                 date,
-                body: "- No changes".to_string()
+                body: "- No changes.".to_string()
             })
         );
     }
@@ -700,7 +700,7 @@ optional = true
             Some(&ReleaseEntry {
                 version: "0.8.17".parse::<Version>().unwrap(),
                 date,
-                body: "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2\n- Updated `a` to `0.8.17`\n- Updated `b` to `0.8.17`".to_string()
+                body: "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2\n- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`.".to_string()
             })
         );
         assert_eq!(
@@ -743,7 +743,7 @@ optional = true
             Some(&ReleaseEntry {
                 version: "0.8.17".parse::<Version>().unwrap(),
                 date,
-                body: "- Updated `a` to `0.8.17`\n- Updated `b` to `0.8.17`".to_string()
+                body: "- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`.".to_string()
             })
         );
     }
