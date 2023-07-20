@@ -1,0 +1,50 @@
+name: Release Shared GitHub Actions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Release
+    runs-on: pub-hk-ubuntu-22.04-small
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Update Rust toolchain
+        run: rustup update
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Get Cargo Metadata
+        id: metadata
+        run: |
+          echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> $GITHUB_OUTPUT
+          echo "name=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
+
+      - name: Bundle Release Asset
+        id: asset
+        run: |
+          ASSET_PATH=${{ env.RUNNER_TEMP }}/${{ steps.metadata.outputs.name }}-v${{ steps.metadata.outputs.version }}-linux-x64.tar.gz
+          tar -czf "${ASSET_PATH}" -C ./target/release ${{ steps.metadata.outputs.name }}
+          echo "path=${ASSET_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.metadata.outputs.version }}
+          files: ${{ steps.asset.outputs.path }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
