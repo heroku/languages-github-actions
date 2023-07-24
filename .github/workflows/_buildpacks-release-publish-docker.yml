@@ -25,9 +25,6 @@ on:
         required: true
         description: The token to login to Docker Hub with
 
-permissions:
-  contents: read
-
 jobs:
   release-publish-docker:
     name: Publish → Docker
@@ -52,7 +49,7 @@ jobs:
       - name: Check if version is already on Docker Hub
         id: check
         run: echo "published_to_docker=$(docker manifest inspect "${{ inputs.docker_repository }}:${{ inputs.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-      
+
       - name: Tag and publish buildpack
         if: steps.check.outputs.published_to_docker == 'false'
         run: |
