@@ -1,3 +1,5 @@
+name: _buildpacks-release-update-builder
+
 on:
   workflow_call:
     inputs:
@@ -9,6 +11,11 @@ on:
         required: true
         type: string
         description: The version of the buildpacks that are being updated
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+        description: Flag used for testing purposes that prevents actual changes to the heroku/builder repo
     secrets:
       app_private_key:
         description: Private key of GitHub application (Linguist)
@@ -45,6 +52,7 @@ jobs:
           version: ${{ inputs.buildpack_version }}
 
       - name: Update Builder
+        if: inputs.dry_run == false
         uses: heroku/languages-github-actions/.github/actions/update-builder@main
         with:
           repository_path: ./buildpacks
