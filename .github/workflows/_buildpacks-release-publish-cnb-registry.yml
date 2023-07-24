@@ -42,7 +42,7 @@ jobs:
 
       - name: Register the new version with the CNB Buildpack Registry
         if: steps.check.outputs.published_to_cnb_registry == 'false'
-        uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.3.0
+        uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.2.0
         with:
           token: ${{ secrets.cnb_registry_token }}
           id: ${{ inputs.buildpack_id }}
