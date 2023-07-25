@@ -32,9 +32,6 @@ on:
         required: true
         description: The token to login to Docker Hub with
 
-permissions:
-  contents: read
-
 jobs:
   release-publish-docker:
     name: Publish → Docker

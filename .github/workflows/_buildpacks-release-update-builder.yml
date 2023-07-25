@@ -21,10 +21,6 @@ on:
         description: Private key of GitHub application (Linguist)
         required: true
 
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   release-update-builder:
     name: Update Builder

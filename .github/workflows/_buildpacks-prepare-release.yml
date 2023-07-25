@@ -20,10 +20,6 @@ on:
         description: Private key of GitHub application (Linguist)
         required: true
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   prepare-release:
     name: Prepare Release

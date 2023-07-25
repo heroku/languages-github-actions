@@ -25,9 +25,6 @@ on:
         required: true
         description: The token to login to the CNB registry with
 
-permissions:
-  contents: read
-
 jobs:
   release-publish-cnb-registry:
     name: Publish → CNB Registry

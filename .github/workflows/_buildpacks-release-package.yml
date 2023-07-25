@@ -20,9 +20,6 @@ on:
         type: string
         description: The prefix name to use for any generated buildpack artifacts
 
-permissions:
-  contents: read
-
 env:
   CARGO_TERM_COLOR: always
 
