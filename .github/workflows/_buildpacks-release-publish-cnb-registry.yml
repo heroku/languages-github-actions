@@ -1,3 +1,5 @@
+name: _buildpacks-release-publish-cnb-registry
+
 on:
   workflow_call:
     inputs:
@@ -13,6 +15,11 @@ on:
         required: true
         type: string
         description: The docker repository to publish the buildpack to
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+        description: Flag used for testing purposes that prevents the actual publish to the CNB registry
     secrets:
       cnb_registry_token:
         required: true
@@ -41,7 +48,7 @@ jobs:
         run: echo "value=$(crane digest ${{ inputs.docker_repository }}:${{ inputs.buildpack_version }})" >> "$GITHUB_OUTPUT"
 
       - name: Register the new version with the CNB Buildpack Registry
-        if: steps.check.outputs.published_to_cnb_registry == 'false'
+        if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'
         uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.2.0
         with:
           token: ${{ secrets.cnb_registry_token }}

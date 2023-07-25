@@ -1,3 +1,5 @@
+name: _buildpacks-release-publish-github
+
 on:
   workflow_call:
     inputs:

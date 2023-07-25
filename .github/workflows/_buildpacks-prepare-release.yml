@@ -1,3 +1,5 @@
+name: _buildpacks-prepare-release
+
 on:
   workflow_call:
     inputs:
