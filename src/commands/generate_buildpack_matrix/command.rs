@@ -1,4 +1,4 @@
-use crate::buildpacks::{find_releasable_buildpacks, read_docker_repository_metadata};
+use crate::buildpacks::{find_releasable_buildpacks, read_image_repository_metadata};
 use crate::commands::generate_buildpack_matrix::errors::Error;
 use crate::github::actions;
 use clap::Parser;
@@ -74,7 +74,7 @@ pub(crate) fn extract_buildpack_info(
 
     let buildpack_artifact_prefix = buildpack_id.replace('/', "_");
 
-    let docker_repository = read_docker_repository_metadata(&buildpack_data.buildpack_descriptor)
+    let docker_repository = read_image_repository_metadata(&buildpack_data.buildpack_descriptor)
         .ok_or(Error::MissingDockerRepositoryMetadata(buildpack_path))?;
 
     Ok(BTreeMap::from([

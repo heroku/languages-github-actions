@@ -36,3 +36,4 @@ toml_edit = "0.19"
 uriparse = "0.6"
 
 [dev-dependencies]
+toml = "0.7"

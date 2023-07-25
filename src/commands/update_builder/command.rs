@@ -1,5 +1,5 @@
 use crate::buildpacks::{
-    calculate_digest, find_releasable_buildpacks, read_docker_repository_metadata,
+    calculate_digest, find_releasable_buildpacks, read_image_repository_metadata,
 };
 use crate::update_builder::errors::Error;
 use clap::Parser;
@@ -65,7 +65,7 @@ pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
             let buildpack_version = &buildpack_data.buildpack_descriptor.buildpack().version;
 
             let docker_repository =
-                read_docker_repository_metadata(&buildpack_data.buildpack_descriptor).ok_or(
+                read_image_repository_metadata(&buildpack_data.buildpack_descriptor).ok_or(
                     Error::MissingDockerRepositoryMetadata(buildpack_path.clone()),
                 )?;
 
