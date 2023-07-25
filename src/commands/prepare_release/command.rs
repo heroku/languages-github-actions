@@ -85,7 +85,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
     let updated_buildpack_ids = buildpack_files
         .iter()
         .map(get_buildpack_id)
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<HashSet<_>>>()?;
 
     let current_version = get_fixed_version(&buildpack_files)?;
 
@@ -95,7 +95,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
         let updated_dependencies = get_buildpack_dependency_ids(&buildpack_file)?
             .into_iter()
             .filter(|buildpack_id| updated_buildpack_ids.contains(buildpack_id))
-            .collect::<Vec<_>>();
+            .collect::<HashSet<_>>();
 
         let new_buildpack_contents = update_buildpack_contents_with_new_version(
             &mut buildpack_file,
@@ -193,7 +193,7 @@ fn get_buildpack_version(buildpack_file: &BuildpackFile) -> Result<BuildpackVers
         .map_err(|_| Error::InvalidBuildpackVersion(buildpack_file.path.clone(), version))
 }
 
-fn get_buildpack_dependency_ids(buildpack_file: &BuildpackFile) -> Result<Vec<BuildpackId>> {
+fn get_buildpack_dependency_ids(buildpack_file: &BuildpackFile) -> Result<HashSet<BuildpackId>> {
     buildpack_file
         .document
         .get("order")
@@ -209,7 +209,7 @@ fn get_buildpack_dependency_ids(buildpack_file: &BuildpackFile) -> Result<Vec<Bu
                 .map(|group| get_group_buildpack_id(group, &buildpack_file.path))
                 .collect::<Vec<_>>()
         })
-        .collect::<Result<Vec<_>>>()
+        .collect::<Result<HashSet<_>>>()
 }
 
 fn get_group_buildpack_id(group: &Table, path: &Path) -> Result<BuildpackId> {
@@ -280,7 +280,7 @@ fn get_next_version(current_version: &BuildpackVersion, bump: &BumpCoordinate) -
 fn update_buildpack_contents_with_new_version(
     buildpack_file: &mut BuildpackFile,
     next_version: &BuildpackVersion,
-    updated_dependencies: &[BuildpackId],
+    updated_dependencies: &HashSet<BuildpackId>,
 ) -> Result<String> {
     let buildpack = buildpack_file
         .document
@@ -321,18 +321,17 @@ fn promote_changelog_unreleased_to_version(
     changelog: &Changelog,
     version: &BuildpackVersion,
     date: &DateTime<Utc>,
-    updated_dependencies: &[BuildpackId],
+    updated_dependencies: &HashSet<BuildpackId>,
 ) -> Changelog {
     let updated_dependencies_text = if updated_dependencies.is_empty() {
         None
     } else {
-        Some(
-            updated_dependencies
-                .iter()
-                .map(|id| format!("- Updated `{id}` to `{version}`."))
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        let mut updated_dependencies_bullet_points = updated_dependencies
+            .iter()
+            .map(|id| format!("- Updated `{id}` to `{version}`."))
+            .collect::<Vec<_>>();
+        updated_dependencies_bullet_points.sort();
+        Some(updated_dependencies_bullet_points.join("\n"))
     };
 
     let changes_with_dependencies = (&changelog.unreleased, &updated_dependencies_text);
@@ -382,7 +381,7 @@ mod test {
     use libcnb_data::buildpack::BuildpackVersion;
     use libcnb_data::buildpack_id;
     use semver::Version;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::path::PathBuf;
     use std::str::FromStr;
     use toml_edit::Document;
@@ -470,9 +469,14 @@ version = "0.0.0"
             minor: 0,
             patch: 0,
         };
+        let updated_dependencies = HashSet::new();
         assert_eq!(
-            update_buildpack_contents_with_new_version(&mut buildpack_file, &next_version, &[])
-                .unwrap(),
+            update_buildpack_contents_with_new_version(
+                &mut buildpack_file,
+                &next_version,
+                &updated_dependencies
+            )
+            .unwrap(),
             r#"[buildpack]
 id = "test"
 version = "1.0.0"
@@ -507,11 +511,12 @@ optional = true
             minor: 0,
             patch: 10,
         };
+        let updated_dependencies = HashSet::from([buildpack_id!("dep-a"), buildpack_id!("dep-b")]);
         assert_eq!(
             update_buildpack_contents_with_new_version(
                 &mut buildpack_file,
                 &next_version,
-                &[buildpack_id!("dep-a"), buildpack_id!("dep-b")]
+                &updated_dependencies
             )
             .unwrap(),
             r#"[buildpack]
@@ -579,7 +584,7 @@ optional = true
             patch: 17,
         };
         let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
-        let updated_dependencies = vec![];
+        let updated_dependencies = HashSet::new();
         let changelog = promote_changelog_unreleased_to_version(
             &changelog,
             &next_version,
@@ -622,7 +627,7 @@ optional = true
             patch: 17,
         };
         let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
-        let updated_dependencies = vec![];
+        let updated_dependencies = HashSet::new();
         let changelog = promote_changelog_unreleased_to_version(
             &changelog,
             &next_version,
@@ -686,7 +691,7 @@ optional = true
             patch: 17,
         };
         let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
-        let updated_dependencies = vec![buildpack_id!("a"), buildpack_id!("b")];
+        let updated_dependencies = HashSet::from([buildpack_id!("b"), buildpack_id!("a")]);
         let changelog = promote_changelog_unreleased_to_version(
             &changelog,
             &next_version,
@@ -729,7 +734,7 @@ optional = true
             patch: 17,
         };
         let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
-        let updated_dependencies = vec![buildpack_id!("a"), buildpack_id!("b")];
+        let updated_dependencies = HashSet::from([buildpack_id!("a"), buildpack_id!("b")]);
         let changelog = promote_changelog_unreleased_to_version(
             &changelog,
             &next_version,
