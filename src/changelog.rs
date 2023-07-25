@@ -107,7 +107,7 @@ impl TryFrom<&str> for Changelog {
                         .parse::<u32>()
                         .map_err(ChangelogError::ParseReleaseEntryDay)?;
                     let date = match Utc.with_ymd_and_hms(year, month, day, 0, 0, 0) {
-                        LocalResult::None => Err(ChangelogError::InvalidReleaseDate),
+                        LocalResult::None => Err(ChangelogError::InvalidReleaseDate(format!("Could not convert year: {year}, month: {month}, day: {day} into a valid date from {header:?}"))),
                         LocalResult::Single(value) => Ok(value),
                         LocalResult::Ambiguous(_, _) => Err(ChangelogError::AmbiguousReleaseDate),
                     }?;
@@ -185,7 +185,7 @@ pub(crate) enum ChangelogError {
     ParseReleaseEntryYear(ParseIntError),
     ParseReleaseEntryMonth(ParseIntError),
     ParseReleaseEntryDay(ParseIntError),
-    InvalidReleaseDate,
+    InvalidReleaseDate(String),
     AmbiguousReleaseDate,
 }
 
@@ -210,8 +210,8 @@ impl Display for ChangelogError {
             ChangelogError::ParseReleaseEntryDay(error) => {
                 write!(f, "Invalid day in release entry - {error}")
             }
-            ChangelogError::InvalidReleaseDate => {
-                write!(f, "Invalid date in release entry")
+            ChangelogError::InvalidReleaseDate(error) => {
+                write!(f, "Invalid date in release entry - {error}")
             }
             ChangelogError::AmbiguousReleaseDate => {
                 write!(f, "Ambiguous date in release entry")
