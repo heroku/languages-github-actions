@@ -326,11 +326,14 @@ fn promote_changelog_unreleased_to_version(
     let updated_dependencies_text = if updated_dependencies.is_empty() {
         None
     } else {
-        let mut updated_dependencies_bullet_points = updated_dependencies
-            .iter()
-            .map(|id| format!("- Updated `{id}` to `{version}`."))
-            .collect::<Vec<_>>();
-        updated_dependencies_bullet_points.sort();
+        let updated_dependencies_bullet_points = {
+            let mut updated_dependencies_bullet_points = updated_dependencies
+                .iter()
+                .map(|id| format!("- Updated `{id}` to `{version}`."))
+                .collect::<Vec<_>>();
+            updated_dependencies_bullet_points.sort();
+            updated_dependencies_bullet_points
+        };
         Some(updated_dependencies_bullet_points.join("\n"))
     };
 
