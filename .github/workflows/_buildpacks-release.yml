@@ -1,0 +1,245 @@
+name: _buildpacks-release
+
+on:
+  workflow_call:
+    inputs:
+      app_id:
+        description: Application ID of GitHub application (Linguist)
+        type: string
+        required: true
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+        description: Flag used for testing purposes that prevents actual changes to the heroku/builder repo
+      ip_allowlisted_image:
+        description: The image to use to run jobs that require IP allowlist privileges
+        type: string
+        required: false
+        default: pub-hk-ubuntu-22.04-small
+    secrets:
+      app_private_key:
+        description: Private key of GitHub application (Linguist)
+        required: true
+      cnb_registry_token:
+        required: true
+        description: The token to login to the CNB registry with
+      docker_hub_user:
+        required: true
+        description: The username to login to Docker Hub with
+      docker_hub_token:
+        required: true
+        description: The token to login to Docker Hub with
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  compile:
+    name: Compile Buildpacks
+    runs-on: ubuntu-latest
+    outputs:
+      buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
+      version: ${{ steps.generate-buildpack-matrix.outputs.version }}
+      changelog: ${{ steps.generate-changelog.outputs.changelog }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Install musl-tools
+        run: sudo apt-get install musl-tools --no-install-recommends
+
+      - name: Update Rust toolchain
+        run: rustup update
+
+      - name: Install Rust linux-musl target
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2.5.1
+
+      - name: Install libcnb-cargo
+        run: cargo install libcnb-cargo
+
+      - name: Package buildpacks
+        id: libcnb-package
+        run: cargo libcnb package --release
+
+      - name: Generate buildpack matrix
+        id: generate-buildpack-matrix
+        uses: heroku/languages-github-actions/.github/actions/generate-buildpack-matrix@main
+
+      - name: Generate changelog
+        id: generate-changelog
+        uses: heroku/languages-github-actions/.github/actions/generate-changelog@main
+        with:
+          version: ${{ steps.generate-buildpack-matrix.outputs.version }}
+
+      - name: Cache buildpacks
+        uses: actions/cache/save@v3
+        with:
+          key: ${{ github.run_id }}-compiled-buildpacks
+          path: target/buildpack
+
+  publish-docker:
+    name: Publish → Docker - ${{ matrix.buildpack_id }}
+    needs: [compile]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
+    steps:
+      - name: Restore buildpacks
+        uses: actions/cache/restore@v3
+        with:
+          key: ${{ github.run_id }}-compiled-buildpacks
+          path: target/buildpack
+
+      - name: Install Pack CLI
+        uses: buildpacks/github-actions/setup-pack@v5.3.0
+
+      - name: Create Docker Image
+        run: pack buildpack package ${{ matrix.buildpack_id }} --config ${{ matrix.buildpack_output_dir }}/package.toml -v
+
+      - name: Login to Docker Hub
+        if: inputs.dry_run == false
+        uses: docker/login-action@v2.2.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.docker_hub_user }}
+          password: ${{ secrets.docker_hub_token }}
+
+      - name: Check if version is already on Docker Hub
+        id: check
+        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      - name: Tag and publish buildpack
+        if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
+        run: |
+          docker tag ${{ matrix.buildpack_id }} ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
+          docker push ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
+
+  publish-github:
+    name: Publish → GitHub - ${{ matrix.buildpack_id }}
+    needs: [compile]
+    runs-on: ${{ inputs.ip_allowlisted_image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
+    steps:
+      - name: Restore buildpacks
+        uses: actions/cache/restore@v3
+        with:
+          key: ${{ github.run_id }}-compiled-buildpacks
+          path: target/buildpack
+
+      - name: Install Pack CLI
+        uses: buildpacks/github-actions/setup-pack@v5.3.0
+
+      - name: Save CNB File
+        run: pack buildpack package ${{ matrix.buildpack_artifact_prefix }}.cnb --config ${{ matrix.buildpack_output_dir }}/package.toml --format file -v
+
+      - name: Get token for GitHub application (Linguist)
+        uses: heroku/use-app-token-action@main
+        id: generate-token
+        with:
+          app_id: ${{ inputs.app_id }}
+          private_key: ${{ secrets.app_private_key }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          token: ${{ steps.generate-token.outputs.app_token }}
+          tag_name: v${{ matrix.buildpack_version }}
+          body: ${{ needs.compile.outputs.changelog }}
+          files: ${{ matrix.buildpack_artifact_prefix }}.cnb
+          fail_on_unmatched_files: true
+
+  publish-cnb:
+    name: Publish → CNB Registry - ${{ matrix.buildpack_id }}
+    needs: [compile, publish-docker]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
+    steps:
+      - name: Install crane
+        uses: buildpacks/github-actions/setup-tools@v5.3.0
+
+      - name: Check if version is already in the registry
+        id: check
+        run: |
+          export URL="https://registry.buildpacks.io/api/v1/buildpacks/${{ matrix.buildpack_id }}/${{ matrix.buildpack_version }}"
+          export EXISTS=$(if [ "$( curl -s -o /dev/null -I -w "%{http_code}" "${URL}")" = "200" ]; then echo 'true'; else echo 'false'; fi)
+          echo "published_to_cnb_registry=${EXISTS}" >> $GITHUB_OUTPUT
+
+      - name: Calculate the buildpack image digest
+        id: digest
+        run: echo "value=$(crane digest ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }})" >> "$GITHUB_OUTPUT"
+
+      - name: Register the new version with the CNB Buildpack Registry
+        if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'
+        uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.2.0
+        with:
+          token: ${{ secrets.cnb_registry_token }}
+          id: ${{ matrix.buildpack_id }}
+          version: ${{ matrix.buildpack_version }}
+          address: ${{ matrix.docker_repository }}@${{ steps.digest.outputs.value }}
+
+  update-builder:
+    name: Update Builder
+    needs: [compile, publish-docker, publish-cnb, publish-github]
+    runs-on: ${{ inputs.ip_allowlisted_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: ./buildpacks
+
+      - name: Checkout builder repository
+        uses: actions/checkout@v3
+        with:
+          repository: heroku/builder
+          path: ./builder
+
+      - name: Install crane
+        uses: buildpacks/github-actions/setup-tools@v5.3.0
+
+      - name: Update Builder
+        if: inputs.dry_run == false
+        uses: heroku/languages-github-actions/.github/actions/update-builder@main
+        with:
+          repository_path: ./buildpacks
+          builder_repository_path: ./builder
+          builders: |
+            builder-22
+            buildpacks-20
+
+      - name: Get token for GitHub application (Linguist)
+        uses: heroku/use-app-token-action@main
+        id: generate-token
+        with:
+          app_id: ${{ inputs.app_id }}
+          private_key: ${{ secrets.app_private_key }}
+
+      - name: Create Pull Request
+        id: pr
+        uses: peter-evans/create-pull-request@v5.0.2
+        with:
+          token: ${{ steps.generate-token.outputs.app_token }}
+          title: Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
+          commit-message: Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
+          path: ./builder
+          branch: update/${{ github.repository }}/${{ needs.compile.outputs.version }}
+          body: ${{ needs.compile.outputs.changelog }}
+
+      - name: Configure PR
+        if: steps.pr.outputs.pull-request-operation == 'created'
+        run: gh pr merge --auto --squash --repo heroku/builder "${{ steps.pr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
