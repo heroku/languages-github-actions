@@ -23,7 +23,7 @@ on:
         required: true
       cnb_registry_token:
         required: true
-        description: The token to login to the CNB registry with
+        description: The token of the GitHub user used to interact with the CNB registry
       docker_hub_user:
         required: true
         description: The username to login to Docker Hub with
