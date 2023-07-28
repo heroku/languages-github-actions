@@ -19,7 +19,7 @@ on:
         default: pub-hk-ubuntu-22.04-small
     secrets:
       app_private_key:
-        description: Private key of GitHub application (Linguist)
+        description: Private key of GitHub application (e.g. the Linguist App)
         required: true
       cnb_registry_token:
         required: true
