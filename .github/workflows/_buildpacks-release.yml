@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       app_id:
-        description: Application ID of GitHub application (Linguist)
+        description: Application ID of GitHub application (e.g. the Linguist App)
         type: string
         required: true
       dry_run:
