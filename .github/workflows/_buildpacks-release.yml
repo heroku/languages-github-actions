@@ -95,8 +95,11 @@ jobs:
       - name: Restore buildpacks
         uses: actions/cache/restore@v3
         with:
+          fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
           path: target/buildpack
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.3.0
@@ -134,8 +137,11 @@ jobs:
       - name: Restore buildpacks
         uses: actions/cache/restore@v3
         with:
+          fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
           path: target/buildpack
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.3.0
