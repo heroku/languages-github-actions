@@ -1,0 +1,127 @@
+name: Release Actions
+
+env:
+  BOT_USER: heroku-linguist[bot]
+  BOT_EMAIL: 136119646+heroku-linguist[bot]@users.noreply.github.com
+  CARGO_TERM_COLOR: always
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump"
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+jobs:
+  prepare:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get token for GH application (Linguist)
+        uses: heroku/use-app-token-action@main
+        id: generate-token
+        with:
+          app_id: ${{ vars.LINGUIST_GH_APP_ID }}
+          private_key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ steps.generate-token.outputs.app_token }}
+
+      - name: Configure git
+        run: |
+          git config --global user.name ${{ env.BOT_USER }}
+          git config --global user.email ${{ env.BOT_EMAIL }}
+
+      - name: Update Rust toolchain
+        run: rustup update
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2.5.1
+
+      - name: Install cargo-bump
+        run: cargo install cargo-bump
+
+      - name: Get previous release version
+        id: previous-version
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+        run: echo "value=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')" >> $GITHUB_OUTPUT
+
+      - name: Bump version
+        run: |
+          cargo bump ${{ steps.previous-version.outputs.value }}
+          cargo bump ${{ inputs.bump }}
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Get release metadata
+        id: metadata
+        run: |
+          echo "name=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
+          echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> $GITHUB_OUTPUT
+
+      - name: Package binary
+        id: package-binary
+        run: |
+          ASSET_PATH=${{ runner.temp }}/${{ steps.metadata.outputs.name }}.tar.gz
+          tar -czf "${ASSET_PATH}" -C ./target/release ${{ steps.metadata.outputs.name }}
+          echo "path=${ASSET_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Update actions/install-languages-cli/action.yml
+        uses: mikefarah/yq@v4.34.2
+        with:
+          cmd: |
+            yq -i '
+              .inputs.download_url.default = "https://github.com/${{ github.repository }}/releases/download/v${{ steps.metadata.outputs.version }}/${{ steps.metadata.outputs.name }}.tar.gz"
+            ' .github/actions/install-languages-cli/action.yml
+
+      - name: Update workflows/_buildpacks-prepare-release.yml
+        uses: mikefarah/yq@v4.34.2
+        with:
+          cmd: |
+            yq -i '
+              (.jobs[].steps[] |
+                select(.uses == "${{ github.repository }}/.github/actions/install-languages-cli@main") |
+                .uses
+              ) = "${{ github.repository }}/.github/actions/install-languages-cli@v${{ steps.metadata.outputs.version }}"
+            ' .github/workflows/_buildpacks-prepare-release.yml
+
+      - name: Update workflows/_buildpacks-release.yml
+        uses: mikefarah/yq@v4.34.2
+        with:
+          cmd: |
+            yq -i '
+              (.jobs[].steps[] |
+                select(.uses == "${{ github.repository }}/.github/actions/install-languages-cli@main") |
+                .uses
+              ) = "${{ github.repository }}/.github/actions/install-languages-cli@v${{ steps.metadata.outputs.version }}"
+            ' .github/workflows/_buildpacks-release.yml
+
+      - name: Add changes to release branch
+        run: |
+          git checkout -b v${{ steps.metadata.outputs.version }}
+          git add .
+          git commit -m "Release v${{ steps.metadata.outputs.version }}"
+          git push -u origin v${{ steps.metadata.outputs.version }}
+          git tag -f latest
+          git push -f origin refs/tags/latest
+
+      - name: Create release
+        uses: softprops/action-gh-release@v0.1.15
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+        with:
+          target_commitish: v${{ steps.metadata.outputs.version }}
+          tag_name: v${{ steps.metadata.outputs.version }}
+          files: ${{ steps.package-binary.outputs.path }}
+          fail_on_unmatched_files: true
+          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ steps.previous-version.outputs.value }}..v${{ steps.metadata.outputs.version }}"

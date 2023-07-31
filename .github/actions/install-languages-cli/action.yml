@@ -1,0 +1,34 @@
+name: Install Languages CLI
+description: Dowloads the Languages CLI from a known release or using Cargo
+
+inputs:
+  download_url:
+    required: false
+    description: The url to download the CLI binary from
+    default: ""
+  update_rust_toolchain:
+    required: false
+    description: Should we run `rustup update` as part of this composite action?
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Update Rust toolchain
+      shell: bash
+      if: inputs.update_rust_toolchain == 'true' && inputs.download_url == ''
+      run: rustup update
+
+    - name: Build actions binary
+      shell: bash
+      if: inputs.download_url == ''
+      run: cargo install --git https://github.com/heroku/languages-github-actions.git
+
+    - name: Download actions binary
+      shell: bash
+      if: inputs.download_url != ''
+      run: |
+        mkdir -p ${{ runner.tool_cache }}/languages-github-actions
+        curl ${{ inputs.download_url }} --output ${{ runner.temp }}/actions.tar.gz -L --retry 5 --retry-all-errors
+        tar -zxvf ${{ runner.temp }}/actions.tar.gz -C ${{ runner.tool_cache }}/languages-github-actions
+        echo "${{ runner.tool_cache }}/languages-github-actions" >> $GITHUB_PATH
