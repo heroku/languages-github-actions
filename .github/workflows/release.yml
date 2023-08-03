@@ -53,7 +53,7 @@ jobs:
         id: previous-version
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
-        run: echo "value=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')" >> $GITHUB_OUTPUT
+        run: echo "value=$((gh release view --json tagName --jq '.tagName' 2> /dev/null || echo "0.0.0") | sed 's/^v//')" >> $GITHUB_OUTPUT
 
       - name: Bump version
         run: |
@@ -77,51 +77,47 @@ jobs:
           echo "path=${ASSET_PATH}" >> $GITHUB_OUTPUT
 
       - name: Update actions/install-languages-cli/action.yml
-        uses: mikefarah/yq@v4.34.2
-        with:
-          cmd: |
-            yq -i '
-              .inputs.download_url.default = "https://github.com/${{ github.repository }}/releases/download/v${{ steps.metadata.outputs.version }}/${{ steps.metadata.outputs.name }}.tar.gz"
-            ' .github/actions/install-languages-cli/action.yml
+        run: |
+          yq -i '
+            .inputs.download_url.default = "https://github.com/${{ github.repository }}/releases/download/v${{ steps.metadata.outputs.version }}/${{ steps.metadata.outputs.name }}.tar.gz"
+          ' .github/actions/install-languages-cli/action.yml
 
       - name: Update workflows/_buildpacks-prepare-release.yml
-        uses: mikefarah/yq@v4.34.2
-        with:
-          cmd: |
-            yq -i '
-              (.jobs[].steps[] |
-                select(.uses == "${{ github.repository }}/.github/actions/install-languages-cli@main") |
-                .uses
-              ) = "${{ github.repository }}/.github/actions/install-languages-cli@v${{ steps.metadata.outputs.version }}"
-            ' .github/workflows/_buildpacks-prepare-release.yml
+        run: |
+          yq -i '
+            (.jobs[].steps[] |
+              select(.uses == "${{ github.repository }}/.github/actions/install-languages-cli@main") |
+              .uses
+            ) = "${{ github.repository }}/.github/actions/install-languages-cli@v${{ steps.metadata.outputs.version }}"
+          ' .github/workflows/_buildpacks-prepare-release.yml
 
       - name: Update workflows/_buildpacks-release.yml
-        uses: mikefarah/yq@v4.34.2
-        with:
-          cmd: |
-            yq -i '
-              (.jobs[].steps[] |
-                select(.uses == "${{ github.repository }}/.github/actions/install-languages-cli@main") |
-                .uses
-              ) = "${{ github.repository }}/.github/actions/install-languages-cli@v${{ steps.metadata.outputs.version }}"
-            ' .github/workflows/_buildpacks-release.yml
-
-      - name: Add changes to release branch
         run: |
-          git checkout -b v${{ steps.metadata.outputs.version }}
+          yq -i '
+            (.jobs[].steps[] |
+              select(.uses == "${{ github.repository }}/.github/actions/install-languages-cli@main") |
+              .uses
+            ) = "${{ github.repository }}/.github/actions/install-languages-cli@v${{ steps.metadata.outputs.version }}"
+          ' .github/workflows/_buildpacks-release.yml
+
+      - name: Create a release tag with required changes
+        id: release-tag
+        run: |
           git add .
           git commit -m "Release v${{ steps.metadata.outputs.version }}"
-          git push -u origin v${{ steps.metadata.outputs.version }}
+          git tag v${{ steps.metadata.outputs.version }}
+          git push origin refs/tags/v${{ steps.metadata.outputs.version }}
           git tag -f latest
           git push -f origin refs/tags/latest
+          echo "sha=$(git rev-list -n 1 v${{ steps.metadata.outputs.version }})" >> $GITHUB_OUTPUT
 
       - name: Create release
         uses: softprops/action-gh-release@v0.1.15
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.app_token }}
         with:
-          target_commitish: v${{ steps.metadata.outputs.version }}
+          target_commitish: ${{ steps.release-tag.outputs.sha }}
           tag_name: v${{ steps.metadata.outputs.version }}
           files: ${{ steps.package-binary.outputs.path }}
           fail_on_unmatched_files: true
-          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ steps.previous-version.outputs.value }}..v${{ steps.metadata.outputs.version }}"
+          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/${{ steps.previous-version.outputs.value == '0.0.0' && 'main' || format('v{0}', steps.previous-version.outputs.value) }}..v${{ steps.metadata.outputs.version }}"
