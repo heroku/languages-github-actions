@@ -29,6 +29,6 @@ runs:
       if: inputs.download_url != ''
       run: |
         mkdir -p ${{ runner.tool_cache }}/languages-github-actions
-        curl ${{ inputs.download_url }} --output ${{ runner.temp }}/actions.tar.gz -L --retry 5 --retry-all-errors
+        curl ${{ inputs.download_url }} --output ${{ runner.temp }}/actions.tar.gz -L --fail --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60
         tar -zxvf ${{ runner.temp }}/actions.tar.gz -C ${{ runner.tool_cache }}/languages-github-actions
         echo "${{ runner.tool_cache }}/languages-github-actions" >> $GITHUB_PATH
