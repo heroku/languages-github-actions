@@ -22,7 +22,7 @@ runs:
     - name: Build actions binary
       shell: bash
       if: inputs.download_url == ''
-      run: cargo install --git https://github.com/heroku/languages-github-actions.git
+      run: cargo install --locked --git https://github.com/heroku/languages-github-actions.git
 
     - name: Download actions binary
       shell: bash
