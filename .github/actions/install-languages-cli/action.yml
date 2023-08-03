@@ -1,5 +1,5 @@
 name: Install Languages CLI
-description: Dowloads the Languages CLI from a known release or using Cargo
+description: Downloads the Languages CLI from a known release or installs using Cargo
 
 inputs:
   download_url:
