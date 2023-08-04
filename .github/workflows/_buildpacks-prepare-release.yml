@@ -8,11 +8,13 @@ on:
         required: true
         type: string
       app_id:
-        description: Application ID of GitHub application (Linguist)
+        description: Application ID of GitHub application (e.g. the Linguist App)
         type: string
         required: true
       declarations_starting_version:
-        description: When generating markdown declarations for each release, what version should be the start?
+        description: |
+          Only needed if existing releases have been published but there is no matching release tag in Git. If this is
+          the case, the first git tag that matches a version from your CHANGELOG should be supplied.
         type: string
         required: false
     secrets:
