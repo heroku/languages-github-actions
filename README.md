@@ -4,18 +4,10 @@ A set of custom GitHub Actions and reusable workflow used by the Languages Team.
 
 - [Workflows](#workflows)
   - [Buildpacks - Prepare Release](#buildpacks---prepare-release)
-  - [Buildpacks Release - Detect](#buildpacks-release---detect)
-  - [Buildpacks Release - Package](#buildpacks-release---package)
-  - [Buildpacks Release - Publish to Docker](#buildpacks-release---publish-to-docker)
-  - [Buildpacks Release - Publish to CNB Registry](#buildpacks-release---publish-to-cnb-registry)
-  - [Buildpacks Release - Publish to GitHub](#buildpacks-release---publish-to-github)
-  - [Buildpacks Release - Update Builder](#buildpacks-release---update-builder)
 - [Actions](#actions)
   - [Generate Buildpack Matrix](#generate-buildpack-matrix)
   - [Generate Changelog](#generate-changelog)
   - [Prepare Release](#prepare-release)
-  - [Restore Buildpack Release](#restore-buildpack-release)
-  - [Save Buildpack Release](#save-buildpack-release)
   - [Update Builder](#update-builder)
 - [Development](#development)
 
@@ -29,7 +21,7 @@ Prepares a buildpack release by:
 * generating an aggregate changelog from all the changelogs
 * opening a PR against the repository with the modified files
 
-#### Usage
+#### Example Usage
 
 ```yaml
 name: Prepare Buildpack Releases
@@ -47,29 +39,24 @@ on:
           - minor
           - patch
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   prepare-release:
     uses: heroku/languages-github-actions/.github/workflows/_buildpacks-prepare-release.yml@main
     with:
-      bump: ${{ inputs.bump }}
-      declarations_starting_version: 1.1.0
       app_id: ${{ vars.GH_APP_ID }}
+      bump: ${{ inputs.bump }}
     secrets:
-      app_private_key: ${{ secrets.GH_PRIVATE_KEY }}
-# ...
+      app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
 ```
 
 #### Inputs
 
-| Name                            | Description                                                                               | Required | Default |
-|---------------------------------|-------------------------------------------------------------------------------------------|----------|---------|
-| `bump`                          | Bump which coordinate? (major, minor, patch)                                              | true     |         |
-| `app_id`                        | Application ID of GitHub application (Linguist)                                           | true     |         |
-| `declarations_starting_version` | When generating markdown declarations for each release, what version should be the start? | false    |         |
+| Name                            | Description                                                                                                                                                                                             | Required | Default |
+|---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|---------|
+| `bump`                          | Bump which coordinate? (major, minor, patch)                                                                                                                                                            | true     |         |
+| `app_id`                        | Application ID of GitHub application (e.g. the Linguist App)                                                                                                                                                       | true     |         |
+| `declarations_starting_version` | Only needed if existing releases have been published but there is no matching release tag in Git. If this is the case, the first git tag that matches a version from your CHANGELOG should be supplied. | false    |         |
 
 #### Secrets
 
@@ -77,301 +64,52 @@ jobs:
 |-------------------|----------------------------------------------|----------|
 | `app_private_key` | Private key of GitHub application (Linguist) | true     |
 
-### Buildpacks Release - Detect
+### Buildpacks - Release
 
-Detects all the buildpacks in a repository and creates a list of buildpack details for use in a matrix strategy `include` list.
+Prepares a buildpack release by:
+* bumping the fixed version
+* updating changelogs
+* generating an aggregate changelog from all the changelogs
+* opening a PR against the repository with the modified files
 
-#### Usage
+#### Example Usage
 
-```yml
+```yaml
 name: Release Buildpacks
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
-  detect:
-    name: Detecting Buildpacks
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-detect.yml@main
-# ...
-```
-
-#### Outputs
-
-| Name         | Description                                                                                                                                                   |
-|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `version`    | The version number that all buildpacks are set to                                                                                                             |
-| `buildpacks` | The list of `{buildpack_id, buildpack_version, buildpack_dir, buildpack_artifact_prefix, docker_repository}` values for a buildpack formatted as a JSON array |
-
-### Buildpacks Release - Package
-
-Compiles and packages a buildpack's artifacts including the changelog, CNB file, and docker image. This should
-be executed using a strategy built from detecting all the buildpacks in a project.
-
-#### Usage
-
-```yml
-name: Release Buildpacks
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pull-requests: write
-
-jobs:
-  detect:
-    name: Detecting Buildpacks
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-detect.yml@main
-
-  package:
-    name: ${{ matrix.buildpack_id }}
-    needs: [ detect ]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.detect.outputs.buildpacks) }}
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-package.yml@main
+  release:
+    name: Release
+    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release.yml@main
     with:
-      buildpack_id: ${{ matrix.buildpack_id }}
-      buildpack_dir: ${{ matrix.buildpack_dir }}
-      buildpack_version: ${{ matrix.buildpack_version }}
-      buildpack_artifact_prefix: ${{ matrix.buildpack_artifact_prefix }}
-# ...
-```
-
-#### Inputs
-
-| Name                        | Description                                                  | Required | Default |
-|-----------------------------|--------------------------------------------------------------|----------|---------|
-| `buildpack_id`              | The id of the buildpack to package                           | true     |         |
-| `buildpack_version`         | The version of the buildpack to package                      | true     |         |
-| `buildpack_dir`             | The directory of the buildpack to package                    | true     |         |
-| `buildpack_artifact_prefix` | The prefix name to use for any generated buildpack artifacts | true     |         |
-
-### Buildpacks Release - Publish to Docker
-
-Publishes a buildpack to Docker. This should be executed using a strategy built from detecting all the buildpacks in a
-project and must happen after the packaging workflow.
-
-#### Example
-
-```yml
-name: Release Buildpacks
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pull-requests: write
-
-jobs:
-  detect:
-    name: Detecting Buildpacks
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-detect.yml@main
-
-  package:
-    # ...
-
-  publish-docker:
-    name: ${{ matrix.buildpack_id }}
-    needs: [ detect, package ]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.detect.outputs.buildpacks) }}
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-publish-docker.yml@main
-    with:
-      buildpack_id: ${{ matrix.buildpack_id }}
-      buildpack_version: ${{ matrix.buildpack_version }}
-      buildpack_artifact_prefix: ${{ matrix.buildpack_artifact_prefix }}
-      docker_repository: ${{ matrix.docker_repository }}
+      app_id: ${{ vars.GH_APP_ID }}
     secrets:
+      app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      cnb_registry_token: ${{ secrets.CNB_REGISTRY_TOKEN }}
       docker_hub_user: ${{ secrets.DOCKER_HUB_USER }}
       docker_hub_token: ${{ secrets.DOCKER_HUB_TOKEN }}
-# ...
+
 ```
 
 #### Inputs
 
-| Name                        | Description                                                  | Required | Default |
-|-----------------------------|--------------------------------------------------------------|----------|---------|
-| `buildpack_id`              | The id of the buildpack to package                           | true     |         |
-| `buildpack_version`         | The version of the buildpack to package                      | true     |         |
-| `docker_repository`         | The docker repository to publish the buildpack to            | true     |         |
-| `buildpack_artifact_prefix` | The prefix name to use for any generated buildpack artifacts | true     |         |
+| Name                    | Description                                                                                         | Required | Default                     |
+|-------------------------|-----------------------------------------------------------------------------------------------------|----------|-----------------------------|
+| `app_id`                | Application ID of GitHub application (e.g. the Linguist App)                                        | true     |                             |
+| `dry_run`               | Flag used for testing purposes to prevent actions that perform publishing operations from executing | false    | false                       |
+| `ip_allowlisted_runner` | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                  | false    | `pub-hk-ubuntu-22.04-small` |
 
 #### Secrets
 
-| Name               | Description                              | Required |
-|--------------------|------------------------------------------|----------|
-| `docker_hub_user`  | The username to login to Docker Hub with | true     |
-| `docker_hub_token` | The token to login to Docker Hub with    | true     |
-
-### Buildpacks Release - Publish to CNB Registry
-
-Publishes a buildpack to the CNB Registry. This should be executed using a strategy built from detecting all the buildpacks in a
-project and must happen after the packaging workflow.
-
-#### Example
-
-```yml
-name: Release Buildpacks
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pull-requests: write
-
-jobs:
-  detect:
-    name: Detecting Buildpacks
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-detect.yml@main
-
-  package:
-    # ...
-
-  publish-cnb:
-    name: ${{ matrix.buildpack_id }}
-    needs: [ detect, publish-docker ]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.detect.outputs.buildpacks) }}
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-publish-cnb-registry.yml@main
-    with:
-      buildpack_id: ${{ matrix.buildpack_id }}
-      buildpack_version: ${{ matrix.buildpack_version }}
-      docker_repository: ${{ matrix.docker_repository }}
-    secrets:
-      cnb_registry_token: ${{ secrets.CNB_REGISTRY_TOKEN }}
-# ...
-```
-
-#### Inputs
-
-| Name                        | Description                                                  | Required | Default |
-|-----------------------------|--------------------------------------------------------------|----------|---------|
-| `buildpack_id`              | The id of the buildpack to package                           | true     |         |
-| `buildpack_version`         | The version of the buildpack to package                      | true     |         |
-| `docker_repository`         | The docker repository to publish the buildpack to            | true     |         |
-
-#### Secrets
-
-| Name                 | Description                                 | Required |
-|----------------------|---------------------------------------------|----------|
-| `cnb_registry_token` | The token to login to the CNB registry with | true     |
-
-### Buildpacks Release - Publish to GitHub
-
-Publishes a buildpack to GitHub [releases](/releases) page. This should be executed using a strategy built from detecting all the buildpacks in a
-project and must happen after the packaging workflow.
-
-#### Example
-
-```yml
-name: Release Buildpacks
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pull-requests: write
-
-jobs:
-  detect:
-    name: Detecting Buildpacks
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-detect.yml@main
-
-  package:
-    # ...
-
-  publish-github:
-    name: ${{ matrix.buildpack_id }}
-    needs: [ detect, package ]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.detect.outputs.buildpacks) }}
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-publish-github.yml@main
-    with:
-      buildpack_version: ${{ matrix.buildpack_version }}
-      buildpack_artifact_prefix: ${{ matrix.buildpack_artifact_prefix }}
-# ...
-```
-
-#### Inputs
-
-| Name                        | Description                                                  | Required | Default |
-|-----------------------------|--------------------------------------------------------------|----------|---------|
-| `buildpack_id`              | The id of the buildpack to package                           | true     |         |
-| `buildpack_version`         | The version of the buildpack to package                      | true     |         |
-| `docker_repository`         | The docker repository to publish the buildpack to            | true     |         |
-
-### Buildpacks Release - Update Builder
-
-Updates all the buildpack references found in [heroku/builder](https://github.com/heroku/builder) for the given list of
-builders and opens a pull requests containing all the changes to be committed. This should happens after all publishing
-workflows have completed.
-
-#### Usage
-
-```yml
-name: Release Buildpacks
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pull-requests: write
-
-jobs:
-  detect:
-    name: Detecting Buildpacks
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-detect.yml@main
-
-  package:
-    # ...
-  publish-docker:
-    # ...
-  publish-github:
-    # ...
-  publish-cnb-registry:
-    # ...
-
-  update-builder:
-    name:
-    needs: [ detect, publish-docker, publish-cnb, publish-github ]
-    uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release-update-builder.yml@main
-    with:
-      app_id: ${{ vars.GH_APP_ID }}
-      buildpack_version: ${{ needs.detect.outputs.version }}
-    secrets:
-      app_private_key: ${{ secrets.GH_PRIVATE_KEY }}
-```
-
-#### Inputs
-
-| Name                            | Description                                                                               | Required | Default |
-|---------------------------------|-------------------------------------------------------------------------------------------|----------|---------|
-| `buildpack_version`             | The version of the buildpacks that are being updated                                      | true     |         |
-| `app_id`                        | Application ID of GitHub application (Linguist)                                           | true     |         |
-
-#### Secrets
-
-| Name              | Description                                  | Required |
-|-------------------|----------------------------------------------|----------|
-| `app_private_key` | Private key of GitHub application (Linguist) | true     |
+| Name                 | Description                                                         | Required |
+|----------------------|---------------------------------------------------------------------|----------|
+| `app_private_key`    | Private key of GitHub application (e.g. the Linguist App)           | true     |
+| `cnb_registry_token` | The token of the GitHub user used to interact with the CNB registry | true     |
+| `docker_hub_user`    | The username to login to Docker Hub with                            | true     |
+| `docker_hub_token`   | The token to login to Docker Hub with                               | true     |
 
 ## Actions
 
@@ -469,55 +207,6 @@ You can also pin to a [specific release](/releases) version in the format `@v{ma
 | `from_version` | The previous version |
 | `to_version`   | The next version     |
 
-### Restore Buildpack Release
-
-Restores various artifacts used in the buildpack release phases.
-
-#### Usage
-
-```yaml
-- name: Restore buildpack release artifacts
-  uses: heroku/languages-github-actions/.github/actions/restore-buildpack-release@main
-```
-
-You can also pin to a [specific release](/releases) version in the format `@v{major}.{minor}.{patch}`
-
-#### Inputs
-
-| Name                        | Description                                                  | Required | Default |
-|-----------------------------|--------------------------------------------------------------|----------|---------|
-| `buildpack_artifact_prefix` | The prefix name to use for any generated buildpack artifacts | true     |         |
-
-#### Outputs
-
-| Name           | Description                                                  |
-|----------------|--------------------------------------------------------------|
-| `changes_file` | This content will be used in PRs and GitHub Releases created |
-| `cnb_file`     | The path to the package .cnb buildpack file                  |
-| `docker_image` | The path to the compressed docker image                      |
-
-### Save Buildpack Release
-
-Saves various artifacts used in the buildpack release phases.
-
-#### Usage
-
-```yaml
-- name: Save buildpack release artifacts
-  uses: heroku/languages-github-actions/.github/actions/save-buildpack-release@main
-```
-
-You can also pin to a [specific release](/releases) version in the format `@v{major}.{minor}.{patch}`
-
-#### Inputs
-
-| Name                        | Description                                                  | Required | Default |
-|-----------------------------|--------------------------------------------------------------|----------|---------|
-| `buildpack_artifact_prefix` | The prefix name to use for any generated buildpack artifacts | true     |         |
-| `changes`                   | This content will be used in PRs and GitHub Releases created | true     |         |
-| `cnb_file`                  | The path to the package .cnb buildpack file                  | true     |         |
-| `docker_image`              | The path to the compressed docker image                      | true     |         |
-
 ### Update Builder
 
 Updates all the buildpack references found in [`heroku/builder`](https://github.com/heroku/builder) for the given list of builders.
@@ -544,7 +233,7 @@ You can also pin to a [specific release](/releases) version in the format `@v{ma
 Custom actions are written in [Rust](https://www.rust-lang.org/) and compiled into a command-line application that
 exposes each action as a sub-command.
 
-```shell
+```
 Usage: actions <COMMAND>
 
 Commands:
