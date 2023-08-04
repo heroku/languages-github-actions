@@ -224,10 +224,11 @@ jobs:
         with:
           repository: heroku/builder
           path: ./builder
-          # The token is used to set the local git config which is used to run authenticated git commands
+          # Using the GH application token here will configure the local git config for this repo with credentials
+          # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
 
-      # This will ensure commits made from this workflow are attributed to the bot user
+      # This will ensure commits made from this workflow are attributed to the GH application user
       - name: Configure git
         run: |
           git config --global user.name ${{ env.BOT_USER }}
@@ -240,8 +241,9 @@ jobs:
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
 
       - name: Update Builder
-        # The dry run check is performed here because the update process requires a published to exist in oder to calculate a digest with `crane`
-        # or it fails. Adding the check here means no files will be modified and no PR will be created for the PR-related steps that follow.
+        # The dry run check is performed here because the update process requires a published
+        # image to exist in order to calculate a digest with `crane`. Adding the check here
+        # means no files will be modified and so no PR will be created later.
         if: inputs.dry_run == false
         run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./builder --builders builder-22,buildpacks-20
 

@@ -33,8 +33,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          # Using the GH application token here will configure the local git config for this repo with credentials
+          # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
 
+      # This will ensure commits made from this workflow are attributed to the GH application user
       - name: Configure git
         run: |
           git config --global user.name ${{ env.BOT_USER }}
@@ -53,7 +56,7 @@ jobs:
         id: previous-version
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
-        run: echo "value=$((gh release view --json tagName --jq '.tagName' 2> /dev/null || echo "0.0.0") | sed 's/^v//')" >> $GITHUB_OUTPUT
+        run: echo "value=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')" >> $GITHUB_OUTPUT
 
       - name: Bump version
         run: |
@@ -120,4 +123,4 @@ jobs:
           tag_name: v${{ steps.metadata.outputs.version }}
           files: ${{ steps.package-binary.outputs.path }}
           fail_on_unmatched_files: true
-          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/${{ steps.previous-version.outputs.value == '0.0.0' && 'main' || format('v{0}', steps.previous-version.outputs.value) }}..v${{ steps.metadata.outputs.version }}"
+          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ steps.previous-version.outputs.value) }}..v${{ steps.metadata.outputs.version }}"
