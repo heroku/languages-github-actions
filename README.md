@@ -20,9 +20,9 @@ Prepares a buildpack release by:
 - opening a PR against the repository with the modified files
 
 You can pin to:
-- the [latest release](/releases/latest) version with `latest`
-- a [specific release](/releases) version with `@v{major}.{minor}.{patch}`
-- the development version with `main`
+- the [latest release](https://github.com/heroku/languages-github-actions/releases/latest) version with `@latest`
+- a [specific release](https://github.com/heroku/languages-github-actions/releases) version with `@v{major}.{minor}.{patch}`
+- the development version with `@main`
 
 #### Example Usage
 
