@@ -58,7 +58,7 @@ jobs:
 | Name                            | Description                                                                                                                                                                                             | Required | Default                     |
 |---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------------------------|
 | `app_id`                        | Application ID of GitHub application (e.g. the Linguist App)                                                                                                                                            | true     |                             |
-| `bump`                          | Which component of the version to increment (major, minor, or patch)                                                                                                                                                            | true     |                             |
+| `bump`                          | Which component of the version to increment (major, minor, or patch)                                                                                                                                    | true     |                             |
 | `declarations_starting_version` | Only needed if existing releases have been published but there is no matching release tag in Git. If this is the case, the first git tag that matches a version from your CHANGELOG should be supplied. | false    |                             |
 | `ip_allowlisted_runner`         | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                                                                                                                      | false    | `pub-hk-ubuntu-22.04-small` |
 
@@ -70,15 +70,21 @@ jobs:
 
 ### Buildpacks - Release
 
-Prepares one or more buildpacks release by:
+Performs the release steps for one or more buildpacks by:
 
-* Detects all the buildpacks in a repository and compiles them into Cloud Native Buildpacks
+* Detecting all the buildpacks in a repository and compiling them into Cloud Native Buildpacks
 * For each compiled buildpack:
-  * Creates a CNB archive file from the compiled buildpack and publishes it as a GitHub Release
-  * Creates an OCI image from the compiled buildpack and publishes it to the Docker Hub repository specified in the buildpack's `buildpack.toml`
-  * Retrieves the OCI image published to Docker Hub and registers this with the CNB Registry
-* Once all buildpacks have been published, updates all the buildpack references found in [heroku/builder](https://github.com/heroku/builder)
-  for the given list of builders and opens a pull requests containing all the changes to be committed.
+  * Creating a CNB archive file from the compiled buildpack and publishing it as a GitHub Release
+  * Creating an OCI image from the compiled buildpack and publishing it to the Docker Hub repository specified in the buildpack's `buildpack.toml`
+    > The following metadata is used for declaring the registry:
+    >
+    > ```toml
+    > [metadata.release.image]
+    > repository = "{repository_url}"
+    > ```
+  * Retrieving the OCI image url published to Docker Hub and registering this with the CNB Registry
+* Once all buildpacks have been published, all the buildpack references found in [heroku/builder](https://github.com/heroku/builder)
+  are updated for the given list of builders and a pull request is opened containing all the changes to be committed.
 
 You can pin to:
 - the [latest release](https://github.com/heroku/languages-github-actions/releases/latest) version with `@latest`
