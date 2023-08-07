@@ -13,7 +13,7 @@ on:
         type: string
         required: true
       bump:
-        description: Bump which coordinate? (major, minor, patch)
+        description: Which component of the version to increment (major, minor, or patch)
         required: true
         type: string
       declarations_starting_version:
