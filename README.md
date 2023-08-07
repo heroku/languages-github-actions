@@ -128,7 +128,7 @@ jobs:
 
 ### Install Languages CLI
 
-Downloads the Languages CLI from a known release or installs using Cargo
+Downloads the Languages CLI from a known release or installs using Cargo.
 
 #### Usage
 
