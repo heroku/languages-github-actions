@@ -81,9 +81,9 @@ Prepares one or more buildpacks release by:
   for the given list of builders and opens a pull requests containing all the changes to be committed.
 
 You can pin to:
-- the [latest release](/releases/latest) version with `latest`
-- a [specific release](/releases) version with `@v{major}.{minor}.{patch}`
-- the development version with `main`
+- the [latest release](https://github.com/heroku/languages-github-actions/releases/latest) version with `@latest`
+- a [specific release](https://github.com/heroku/languages-github-actions/releases) version with `@v{major}.{minor}.{patch}`
+- the development version with `@main`
 
 #### Example Usage
 
