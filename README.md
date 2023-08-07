@@ -4,7 +4,7 @@ A set of custom GitHub Actions and reusable workflow used by the Languages Team.
 
 - [Workflows](#workflows)
   - [Buildpacks - Prepare Release](#buildpacks---prepare-release)
-  - [Buildpacks - Prepare Release](#buildpacks---release)
+  - [Buildpacks - Release](#buildpacks---release)
 - [Actions](#actions)
   - [Install Languages CLI](#install-languages-cli)
 - [Development](#development)
