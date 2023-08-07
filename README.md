@@ -75,7 +75,7 @@ Prepares one or more buildpacks release by:
 * Detects all the buildpacks in a repository and compiles them into Cloud Native Buildpacks
 * For each compiled buildpack:
   * Creates a CNB archive file from the compiled buildpack and publishes it as a GitHub Release
-  * Creates an OCI image from the compiled buildpack and publishes it to Docker
+  * Creates an OCI image from the compiled buildpack and publishes it to the Docker Hub repository specified in the buildpack's `buildpack.toml`
   * Retrieves the OCI image published to Docker Hub and registers this with the CNB Registry
 * Once all buildpacks have been published, updates all the buildpack references found in [heroku/builder](https://github.com/heroku/builder)
   for the given list of builders and opens a pull requests containing all the changes to be committed.
