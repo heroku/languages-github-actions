@@ -3,6 +3,7 @@
 A set of custom GitHub Actions and reusable workflow used by the Languages Team.
 
 - [Workflows](#workflows)
+  - [Required Configuration](#required-configuration)
   - [Buildpacks - Prepare Release](#buildpacks---prepare-release)
   - [Buildpacks - Release](#buildpacks---release)
 - [Actions](#actions)
@@ -10,6 +11,21 @@ A set of custom GitHub Actions and reusable workflow used by the Languages Team.
 - [Development](#development)
 
 ## Workflows
+
+### Required Configuration
+
+Before using the shared workflows below, please be sure to configure the following settings in your repository:
+
+* [Edit the branch protection rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/managing-a-branch-protection-rule#editing-a-branch-protection-rule)
+  on the default branch (e.g.; `main`). If **Restrict who can push to matching branches** and **Restrict pushes that create matching branches** is checked, then add the bot user
+  of the GitHub Application that will be used to create pull requests and commits (e.g.; `heroku-linguist`).
+* [Configure PR merges](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-auto-merge-for-pull-requests-in-your-repository#managing-auto-merge)
+  to **Allow auto-merge**.
+
+> If either of these settings are misconfigured you will encounter errors during steps that
+> create or configure pull requests. For example, an error message of **"Pull request User is 
+> not authorized for this protected branch"** indicates the branch protection rules are missing
+> the GitHub Application bot user.
 
 ### Buildpacks - Prepare Release
 
