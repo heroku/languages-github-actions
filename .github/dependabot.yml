@@ -13,7 +13,3 @@ updates:
         patterns:
           - "libcnb*"
           - "libherokubuildpack"
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "monthly"

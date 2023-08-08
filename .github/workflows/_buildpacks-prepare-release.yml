@@ -1,22 +1,32 @@
 name: _buildpacks-prepare-release
 
+env:
+  BOT_USER: heroku-linguist[bot]
+  BOT_EMAIL: 136119646+heroku-linguist[bot]@users.noreply.github.com
+  CARGO_TERM_COLOR: always
+
 on:
   workflow_call:
     inputs:
-      bump:
-        description: Bump which coordinate? (major, minor, patch)
-        required: true
-        type: string
       app_id:
         description: Application ID of GitHub application (e.g. the Linguist App)
         type: string
         required: true
+      bump:
+        description: Which component of the version to increment (major, minor, or patch)
+        required: true
+        type: string
       declarations_starting_version:
         description: |
           Only needed if existing releases have been published but there is no matching release tag in Git. If this is
           the case, the first git tag that matches a version from your CHANGELOG should be supplied.
         type: string
         required: false
+      ip_allowlisted_runner:
+        description: The GitHub Actions runner to use to run jobs that require IP allow-list privileges
+        type: string
+        required: false
+        default: pub-hk-ubuntu-22.04-small
     secrets:
       app_private_key:
         description: Private key of GitHub application (Linguist)
@@ -25,30 +35,42 @@ on:
 jobs:
   prepare-release:
     name: Prepare Release
-    runs-on: pub-hk-ubuntu-22.04-small
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Bump versions and update changelogs
-        id: prepare
-        uses: heroku/languages-github-actions/.github/actions/prepare-release@main
-        with:
-          bump: ${{ inputs.bump }}
-          declarations_starting_version: ${{ inputs.declarations_starting_version }}
-
-      - name: Generate changelog
-        id: generate-changelog
-        uses: heroku/languages-github-actions/.github/actions/generate-changelog@main
-        with:
-          version: ${{ steps.prepare.outputs.to_version }}
-
       - name: Get token for GH application (Linguist)
         uses: heroku/use-app-token-action@main
         id: generate-token
         with:
           app_id: ${{ inputs.app_id }}
           private_key: ${{ secrets.app_private_key }}
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          # Using the GH application token here will configure the local git config for this repo with credentials
+          # that can be used to make signed commits that are attributed to the GH application user
+          token: ${{ steps.generate-token.outputs.app_token }}
+
+      # This will ensure commits made from this workflow are attributed to the GH application user
+      - name: Configure git
+        run: |
+          git config --global user.name ${{ env.BOT_USER }}
+          git config --global user.email ${{ env.BOT_EMAIL }}
+
+      - name: Install Languages CLI
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+
+      - name: Bump versions and update changelogs
+        id: prepare
+        run: |
+          actions prepare-release \
+            --bump ${{ inputs.bump }} \
+            --repository-url https://github.com/${{ github.repository }} \
+            ${{ inputs.declarations_starting_version && format('--declarations-starting-version {0}', inputs.declarations_starting_version) }}
+
+      - name: Generate changelog
+        id: generate-changelog
+        run: actions generate-changelog --version ${{ steps.prepare.outputs.to_version }}
 
       - name: Create pull request
         id: pr

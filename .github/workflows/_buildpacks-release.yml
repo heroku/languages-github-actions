@@ -1,5 +1,10 @@
 name: _buildpacks-release
 
+env:
+  BOT_USER: heroku-linguist[bot]
+  BOT_EMAIL: 136119646+heroku-linguist[bot]@users.noreply.github.com
+  CARGO_TERM_COLOR: always
+
 on:
   workflow_call:
     inputs:
@@ -31,9 +36,6 @@ on:
         required: true
         description: The token to login to Docker Hub with
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   compile:
     name: Compile Buildpacks
@@ -63,19 +65,22 @@ jobs:
       - name: Install libcnb-cargo
         run: cargo install libcnb-cargo
 
+      - name: Install Languages CLI
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        with:
+          update_rust_toolchain: false
+
       - name: Package buildpacks
         id: libcnb-package
         run: cargo libcnb package --release
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
-        uses: heroku/languages-github-actions/.github/actions/generate-buildpack-matrix@main
+        run: actions generate-buildpack-matrix
 
       - name: Generate changelog
         id: generate-changelog
-        uses: heroku/languages-github-actions/.github/actions/generate-changelog@main
-        with:
-          version: ${{ steps.generate-buildpack-matrix.outputs.version }}
+        run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
 
       - name: Cache buildpacks
         uses: actions/cache/save@v3
@@ -202,6 +207,13 @@ jobs:
     needs: [compile, publish-docker, publish-cnb, publish-github]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
+      - name: Get token for GH application (Linguist)
+        uses: heroku/use-app-token-action@main
+        id: generate-token
+        with:
+          app_id: ${{ inputs.app_id }}
+          private_key: ${{ secrets.app_private_key }}
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -212,29 +224,31 @@ jobs:
         with:
           repository: heroku/builder
           path: ./builder
+          # Using the GH application token here will configure the local git config for this repo with credentials
+          # that can be used to make signed commits that are attributed to the GH application user
+          token: ${{ steps.generate-token.outputs.app_token }}
+
+      # This will ensure commits made from this workflow are attributed to the GH application user
+      - name: Configure git
+        run: |
+          git config --global user.name ${{ env.BOT_USER }}
+          git config --global user.email ${{ env.BOT_EMAIL }}
 
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@v5.3.0
 
-      - name: Update Builder
-        uses: heroku/languages-github-actions/.github/actions/update-builder@main
-        with:
-          repository_path: ./buildpacks
-          builder_repository_path: ./builder
-          builders: |
-            builder-22
-            buildpacks-20
+      - name: Install Languages CLI
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
 
-      - name: Get token for GitHub application (Linguist)
-        uses: heroku/use-app-token-action@main
-        id: generate-token
-        with:
-          app_id: ${{ inputs.app_id }}
-          private_key: ${{ secrets.app_private_key }}
+      - name: Update Builder
+        # The dry run check is performed here because the update process requires a published
+        # image to exist in order to calculate a digest with `crane`. Adding the check here
+        # means no files will be modified and so no PR will be created later.
+        if: inputs.dry_run == false
+        run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./builder --builders builder-22,buildpacks-20
 
       - name: Create Pull Request
         id: pr
-        if: inputs.dry_run == false
         uses: peter-evans/create-pull-request@v5.0.2
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
@@ -245,7 +259,7 @@ jobs:
           body: ${{ needs.compile.outputs.changelog }}
 
       - name: Configure PR
-        if: inputs.dry_run == false && steps.pr.outputs.pull-request-operation == 'created'
+        if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash --repo heroku/builder "${{ steps.pr.outputs.pull-request-number }}"
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
