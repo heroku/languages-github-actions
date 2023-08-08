@@ -123,4 +123,4 @@ jobs:
           tag_name: v${{ steps.metadata.outputs.version }}
           files: ${{ steps.package-binary.outputs.path }}
           fail_on_unmatched_files: true
-          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ steps.previous-version.outputs.value) }}..v${{ steps.metadata.outputs.version }}"
+          body: "Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ steps.previous-version.outputs.value }}..v${{ steps.metadata.outputs.version }}"
