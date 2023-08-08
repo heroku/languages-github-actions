@@ -82,7 +82,6 @@ jobs:
           branch: prepare-release
           delete-branch: true
           body: ${{ steps.generate-changelog.outputs.changelog }}
-          labels: "automation"
 
       - name: Configure pull request
         if: steps.pr.outputs.pull-request-operation == 'created'
