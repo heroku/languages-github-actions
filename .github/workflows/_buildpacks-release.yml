@@ -255,7 +255,8 @@ jobs:
           title: Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
           commit-message: Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
           path: ./builder
-          branch: update/${{ github.repository }}/${{ needs.compile.outputs.version }}
+          branch: update/${{ github.repository }}
+          delete-branch: true
           body: ${{ needs.compile.outputs.changelog }}
 
       - name: Configure PR

@@ -79,7 +79,8 @@ jobs:
           token: ${{ steps.generate-token.outputs.app_token }}
           title: Prepare release v${{ steps.prepare.outputs.to_version }}
           commit-message: Prepare release v${{ steps.prepare.outputs.to_version }}
-          branch: prepare/v${{ steps.prepare.outputs.to_version }}
+          branch: prepare-release
+          delete-branch: true
           body: ${{ steps.generate-changelog.outputs.changelog }}
           labels: "automation"
 
