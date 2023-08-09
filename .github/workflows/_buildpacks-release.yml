@@ -166,10 +166,7 @@ jobs:
         id: check
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
-        run: echo "published_to_github=$(gh release view v0.0.3 &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
-
-      - name: Test
-        run: echo "${{ steps.check.outputs.published_to_github }}"
+        run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         if: steps.check.outputs.published_to_github == 'false'
