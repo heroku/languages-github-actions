@@ -1,8 +1,6 @@
 name: Release Actions
 
 env:
-  BOT_USER: heroku-linguist[bot]
-  BOT_EMAIL: 136119646+heroku-linguist[bot]@users.noreply.github.com
   CARGO_TERM_COLOR: always
 
 on:
@@ -40,8 +38,8 @@ jobs:
       # This will ensure commits made from this workflow are attributed to the GH application user
       - name: Configure git
         run: |
-          git config --global user.name ${{ env.BOT_USER }}
-          git config --global user.email ${{ env.BOT_EMAIL }}
+          git config --global user.name ${{ vars.LINGUIST_GH_APP_USERNAME }}
+          git config --global user.email ${{ vars.LINGUIST_GH_APP_EMAIL }}
 
       - name: Update Rust toolchain
         run: rustup update

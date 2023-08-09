@@ -1,17 +1,25 @@
 name: _buildpacks-prepare-release
 
 env:
-  BOT_USER: heroku-linguist[bot]
-  BOT_EMAIL: 136119646+heroku-linguist[bot]@users.noreply.github.com
   CARGO_TERM_COLOR: always
 
 on:
   workflow_call:
     inputs:
       app_id:
-        description: Application ID of GitHub application (e.g. the Linguist App)
+        description: Application ID of GitHub application (e.g.; the Linguist App)
         type: string
         required: true
+      app_email:
+        description: The email address of the GitHub application bot user (e.g.; the Linguist App)
+        type: string
+        required: false
+        default: ${{ vars.LINGUIST_GH_APP_EMAIL }}
+      app_username:
+        description: The username of the GitHub application bot user (e.g.; the Linguist App)
+        type: string
+        required: false
+        default: ${{ vars.LINGUIST_GH_APP_USERNAME }}
       bump:
         description: Which component of the version to increment (major, minor, or patch)
         required: true
@@ -54,8 +62,8 @@ jobs:
       # This will ensure commits made from this workflow are attributed to the GH application user
       - name: Configure git
         run: |
-          git config --global user.name ${{ env.BOT_USER }}
-          git config --global user.email ${{ env.BOT_EMAIL }}
+          git config --global user.name ${{ inputs.app_username }}
+          git config --global user.email ${{ inputs.app_email }}
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
