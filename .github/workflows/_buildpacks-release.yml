@@ -166,7 +166,7 @@ jobs:
         uses: softprops/action-gh-release@v0.1.15
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
-          tag_name: v${{ matrix.buildpack_version }}
+          tag_name: v${{ needs.compile.outputs.version }}
           body: ${{ needs.compile.outputs.changelog }}
           files: "*.cnb"
           fail_on_unmatched_files: true
