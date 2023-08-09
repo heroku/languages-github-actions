@@ -78,10 +78,13 @@ jobs:
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
           title: Prepare release v${{ steps.prepare.outputs.to_version }}
-          commit-message: Prepare release v${{ steps.prepare.outputs.to_version }}
+          body: ${{ steps.generate-changelog.outputs.changelog }}
+          commit-message: |
+            Prepare release v${{ steps.prepare.outputs.to_version }}
+
+            ${{ steps.generate-changelog.outputs.changelog }}
           branch: prepare-release
           delete-branch: true
-          body: ${{ steps.generate-changelog.outputs.changelog }}
 
       - name: Configure pull request
         if: steps.pr.outputs.pull-request-operation == 'created'
