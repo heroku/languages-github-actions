@@ -169,7 +169,7 @@ jobs:
         run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: steps.check.outputs.published_to_github == 'false'
+        if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
         uses: softprops/action-gh-release@v0.1.15
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
