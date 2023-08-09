@@ -134,10 +134,6 @@ jobs:
     name: Publish → GitHub - ${{ matrix.buildpack_id }}
     needs: [compile]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Restore buildpacks
         uses: actions/cache/restore@v3
@@ -151,8 +147,13 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.3.1
 
-      - name: Save CNB File
-        run: pack buildpack package ${{ matrix.buildpack_artifact_prefix }}.cnb --config ${{ matrix.buildpack_output_dir }}/package.toml --format file -v
+      - name: Save CNB Files
+        run: |
+          for buildpack in $(echo '${{ needs.compile.outputs.buildpacks }}' | jq -c '.[]'); do
+            artifact_prefix=$(echo "${buildpack}" | jq -r '.buildpack_artifact_prefix')
+            output_dir=$(echo "${buildpack}" | jq -r '.buildpack_output_dir')
+            pack buildpack package ${artifact_prefix}.cnb --config ${output_dir}/package.toml --format file -v
+          done
 
       - name: Get token for GitHub application (Linguist)
         uses: heroku/use-app-token-action@main
@@ -167,7 +168,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.app_token }}
           tag_name: v${{ matrix.buildpack_version }}
           body: ${{ needs.compile.outputs.changelog }}
-          files: ${{ matrix.buildpack_artifact_prefix }}.cnb
+          files: "*.cnb"
           fail_on_unmatched_files: true
 
   publish-cnb:
