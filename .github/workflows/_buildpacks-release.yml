@@ -149,10 +149,10 @@ jobs:
 
       - name: Generate CNB files
         run: |
-          for buildpack in $(echo '${{ needs.compile.outputs.buildpacks }}' | jq -c '.[]'); do
-            artifact_prefix=$(echo "${buildpack}" | jq -r '.buildpack_artifact_prefix')
-            output_dir=$(echo "${buildpack}" | jq -r '.buildpack_output_dir')
-            pack buildpack package ${artifact_prefix}.cnb --config ${output_dir}/package.toml --format file -v
+          for buildpack in $(jq -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+            artifact_prefix=$(jq -r '.buildpack_artifact_prefix' <<< "${buildpack}")
+            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+            pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
           done
 
       - name: Get token for GitHub application (Linguist)
