@@ -139,13 +139,9 @@ jobs:
           docker push ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
 
   publish-github:
-    name: Publish → GitHub - ${{ matrix.buildpack_id }}
+    name: Publish → GitHub Release
     needs: [compile]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Restore buildpacks
         uses: actions/cache/restore@v3
@@ -159,8 +155,13 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.3.1
 
-      - name: Save CNB File
-        run: pack buildpack package ${{ matrix.buildpack_artifact_prefix }}.cnb --config ${{ matrix.buildpack_output_dir }}/package.toml --format file -v
+      - name: Generate CNB files
+        run: |
+          for buildpack in $(jq -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+            artifact_prefix=$(jq -r '.buildpack_artifact_prefix' <<< "${buildpack}")
+            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+            pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+          done
 
       - name: Get token for GitHub application (Linguist)
         uses: heroku/use-app-token-action@main
@@ -169,13 +170,20 @@ jobs:
           app_id: ${{ inputs.app_id }}
           private_key: ${{ secrets.app_private_key }}
 
+      - name: Check if release exists
+        id: check
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+        run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
+        if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
         uses: softprops/action-gh-release@v0.1.15
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
-          tag_name: v${{ matrix.buildpack_version }}
+          tag_name: v${{ needs.compile.outputs.version }}
           body: ${{ needs.compile.outputs.changelog }}
-          files: ${{ matrix.buildpack_artifact_prefix }}.cnb
+          files: "*.cnb"
           fail_on_unmatched_files: true
 
   publish-cnb:
