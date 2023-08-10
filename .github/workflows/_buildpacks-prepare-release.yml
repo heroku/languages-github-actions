@@ -1,8 +1,6 @@
 name: _buildpacks-prepare-release
-
 env:
   CARGO_TERM_COLOR: always
-
 on:
   workflow_call:
     inputs:
@@ -39,7 +37,6 @@ on:
       app_private_key:
         description: Private key of GitHub application (Linguist)
         required: true
-
 jobs:
   prepare-release:
     name: Prepare Release
@@ -51,23 +48,19 @@ jobs:
         with:
           app_id: ${{ inputs.app_id }}
           private_key: ${{ secrets.app_private_key }}
-
       - name: Checkout
         uses: actions/checkout@v3
         with:
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
-
       # This will ensure commits made from this workflow are attributed to the GH application user
       - name: Configure git
         run: |
           git config --global user.name ${{ inputs.app_username }}
           git config --global user.email ${{ inputs.app_email }}
-
       - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
-
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@v0.1.1
       - name: Bump versions and update changelogs
         id: prepare
         run: |
@@ -75,11 +68,9 @@ jobs:
             --bump ${{ inputs.bump }} \
             --repository-url https://github.com/${{ github.repository }} \
             ${{ inputs.declarations_starting_version && format('--declarations-starting-version {0}', inputs.declarations_starting_version) }}
-
       - name: Generate changelog
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.prepare.outputs.to_version }}
-
       - name: Create pull request
         id: pr
         uses: peter-evans/create-pull-request@v5.0.2
@@ -93,7 +84,6 @@ jobs:
             ${{ steps.generate-changelog.outputs.changelog }}
           branch: prepare-release
           delete-branch: true
-
       - name: Configure pull request
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash "${{ steps.pr.outputs.pull-request-number }}"
