@@ -147,7 +147,7 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.3.1
 
-      - name: Save CNB Files
+      - name: Generate CNB files
         run: |
           for buildpack in $(echo '${{ needs.compile.outputs.buildpacks }}' | jq -c '.[]'); do
             artifact_prefix=$(echo "${buildpack}" | jq -r '.buildpack_artifact_prefix')
