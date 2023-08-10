@@ -90,6 +90,44 @@ jobs:
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
 
+      - name: Temporary fix for bash-based buildpacks
+        run: |
+          buildpacks='${{ steps.generate-buildpack-matrix.outputs.buildpacks }}'
+
+          bash_buildpack_source_dirs=()
+          bash_buildpack_output_dirs=()
+
+          # copy any bash-based buildpack to target buildpack dir because `cargo libcnb package` will ignore them
+          for buildpack in $(jq -c '.[]' <<< "${buildpacks}"); do
+            buildpack_dir=$(jq -r '.buildpack_dir' <<< "${buildpack}")
+            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+            if [ ! -d "${output_dir}" ]; then
+              echo "bash-based buildpack detected at ${buildpack_dir}"
+              cp -R "${buildpack_dir}" "${output_dir}"
+              bash_buildpack_source_dirs+=("${buildpack_dir}")
+              bash_buildpack_output_dirs+=("${output_dir}")
+            fi
+          done
+
+          # replace dependencies that reference a bash-buildpack
+          for buildpack in $(jq -c '.[]' <<< "${buildpacks}"); do
+            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+            echo "checking dependencies in ${output_dir}/package.toml"
+            for dep in $(yq -oy '.dependencies[].uri' "${output_dir}/package.toml"); do
+              if realpath "${dep}" &> /dev/null; then
+                dep_path=$(realpath "${dep}")
+                for i in "${!bash_buildpack_source_dirs[@]}"; do
+                  bash_buildpack_source_dir="${bash_buildpack_source_dirs[$i]}"
+                  bash_buildpack_output_dir="${bash_buildpack_output_dirs[$i]}"
+                  if [ "${bash_buildpack_source_dir}" = "${dep_path}" ]; then
+                    echo "replacing ${dep} with ${bash_buildpack_output_dir}"
+                    sed -i 's|'"$dep"'|'"$bash_buildpack_output_dir"'|g' "${output_dir}/package.toml"
+                  fi
+                done
+              fi
+            done
+          done
+
       - name: Cache buildpacks
         uses: actions/cache/save@v3
         with:
