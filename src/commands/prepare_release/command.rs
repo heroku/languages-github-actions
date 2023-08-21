@@ -118,7 +118,8 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
             repository_url.to_string(),
             &declarations_starting_version,
         );
-        let changelog_contents = format!("{new_changelog}\n{release_declarations}");
+
+        let changelog_contents = format!("{new_changelog}\n{release_declarations}\n");
 
         write(&changelog_file.path, changelog_contents)
             .map_err(|e| Error::WritingChangelog(changelog_file.path.clone(), e))?;
