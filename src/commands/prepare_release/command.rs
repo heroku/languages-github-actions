@@ -22,7 +22,7 @@ pub(crate) struct PrepareReleaseArgs {
     #[arg(long, value_enum)]
     pub(crate) bump: BumpCoordinate,
     #[arg(long)]
-    pub(crate) repository_url: Option<String>,
+    pub(crate) repository_url: String,
     #[arg(long)]
     pub(crate) declarations_starting_version: Option<String>,
 }
@@ -47,14 +47,9 @@ struct ChangelogFile {
 pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
 
-    let repository_url = args
-        .repository_url
-        .map(|url| {
-            URI::try_from(url.as_str())
-                .map(uriparse::URI::into_owned)
-                .map_err(|e| Error::InvalidRepositoryUrl(url.clone(), e))
-        })
-        .transpose()?;
+    let repository_url = URI::try_from(args.repository_url.as_str())
+        .map(uriparse::URI::into_owned)
+        .map_err(|e| Error::InvalidRepositoryUrl(args.repository_url.clone(), e))?;
 
     let declarations_starting_version = args
         .declarations_starting_version
@@ -118,17 +113,12 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
             &updated_dependencies,
         );
 
-        let changelog_contents = match &repository_url {
-            Some(repository) => {
-                let release_declarations = generate_release_declarations(
-                    &new_changelog,
-                    repository.to_string(),
-                    &declarations_starting_version,
-                );
-                format!("{new_changelog}\n{release_declarations}")
-            }
-            None => new_changelog.to_string(),
-        };
+        let release_declarations = generate_release_declarations(
+            &new_changelog,
+            repository_url.to_string(),
+            &declarations_starting_version,
+        );
+        let changelog_contents = format!("{new_changelog}\n{release_declarations}");
 
         write(&changelog_file.path, changelog_contents)
             .map_err(|e| Error::WritingChangelog(changelog_file.path.clone(), e))?;
