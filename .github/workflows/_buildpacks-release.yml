@@ -68,7 +68,7 @@ jobs:
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2.6.0
+        uses: Swatinem/rust-cache@v2.6.2
 
       - name: Install libcnb-cargo
         # TODO: Derive this version from the `libcnb-package` version in this repo's `Cargo.toml`,
