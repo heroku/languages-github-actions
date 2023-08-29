@@ -2,6 +2,10 @@ name: Install Languages CLI
 description: Downloads the Languages CLI from a known release or installs using Cargo
 
 inputs:
+  branch:
+    required: false
+    description: The branch to install the CLI from (only used when `download_url` is not provided)
+    default: main
   download_url:
     required: false
     description: The url to download the CLI binary from
@@ -22,7 +26,7 @@ runs:
     - name: Build actions binary
       shell: bash
       if: inputs.download_url == ''
-      run: cargo install --locked --git https://github.com/heroku/languages-github-actions.git
+      run: cargo install --locked --git https://github.com/heroku/languages-github-actions.git --branch ${{ inputs.branch }}
 
     - name: Download actions binary
       shell: bash
