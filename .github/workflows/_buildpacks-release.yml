@@ -70,10 +70,12 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.6.2
 
+      # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
+      # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
-        # TODO: Derive this version from the `libcnb-package` version in this repo's `Cargo.toml`,
-        # or at least add a CI check to ensure the two versions are in sync.
-        run: cargo install --locked libcnb-cargo@0.13.0
+        run: |
+          LIBCNB_PACKAGE_VERSION=$(yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' Cargo.lock)
+          cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
