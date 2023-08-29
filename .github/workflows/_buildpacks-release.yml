@@ -284,12 +284,6 @@ jobs:
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
 
-      # This will ensure commits made from this workflow are attributed to the GH application user
-      - name: Configure git
-        run: |
-          git config --global user.name ${{ inputs.app_username }}
-          git config --global user.email ${{ inputs.app_email }}
-
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@v5.4.0
 
@@ -317,6 +311,9 @@ jobs:
           path: ./builder
           branch: update/${{ github.repository }}
           delete-branch: true
+          # This will ensure commits made from this workflow are attributed to the GH application user
+          committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
+          author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
 
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
