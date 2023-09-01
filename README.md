@@ -23,7 +23,7 @@ Before using the shared workflows below, please be sure to configure the followi
   to **Allow auto-merge**.
 
 > If either of these settings are misconfigured you will encounter errors during steps that
-> create or configure pull requests. For example, an error message of **"Pull request User is 
+> create or configure pull requests. For example, an error message of **"Pull request User is
 > not authorized for this protected branch"** indicates the branch protection rules are missing
 > the GitHub Application bot user.
 
@@ -77,6 +77,7 @@ jobs:
 | `bump`                          | Which component of the version to increment (major, minor, or patch)                                                                                                                                    | true     |                             |
 | `declarations_starting_version` | Only needed if existing releases have been published but there is no matching release tag in Git. If this is the case, the first git tag that matches a version from your CHANGELOG should be supplied. | false    |                             |
 | `ip_allowlisted_runner`         | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                                                                                                                      | false    | `pub-hk-ubuntu-22.04-small` |
+| `languages_cli_branch`          | The branch to install the Languages CLI from (FOR TESTING)                                                                                                                                              | false    | `main`                      |
 
 #### Secrets
 
@@ -136,6 +137,7 @@ jobs:
 | `app_id`                | Application ID of GitHub application (e.g. the Linguist App)                                        | true     |                             |
 | `dry_run`               | Flag used for testing purposes to prevent actions that perform publishing operations from executing | false    | false                       |
 | `ip_allowlisted_runner` | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                  | false    | `pub-hk-ubuntu-22.04-small` |
+| `languages_cli_branch`  | The branch to install the Languages CLI from (FOR TESTING)                                          | false    | `main`                      |
 
 #### Secrets
 
