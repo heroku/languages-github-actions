@@ -25,7 +25,6 @@ clap = { version = "4", default-features = false, features = [
 ] }
 indexmap = "2"
 lazy_static = "1"
-# NB: Make sure to keep the `libcnb-cargo` version in `_buildpacks-release.yml` in sync with these.
 libcnb-data = "=0.13.0"
 libcnb-package = "=0.13.0"
 markdown = "1.0.0-alpha.12"
