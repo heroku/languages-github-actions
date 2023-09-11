@@ -75,6 +75,9 @@ jobs:
       - name: Install libcnb-cargo
         run: |
           LIBCNB_PACKAGE_VERSION=$(yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' Cargo.lock)
+          yq --version
+          yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' Cargo.lock
+          echo $LIBCNB_PACKAGE_VERSION
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
       - name: Install Languages CLI
