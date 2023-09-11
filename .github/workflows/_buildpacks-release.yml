@@ -79,9 +79,8 @@ jobs:
       # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
         run: |
-          LIBCNB_PACKAGE_VERSION=$(yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' Cargo.lock)
-          yq --version
-          yq -ptoml -oyaml '.' Cargo.lock
+          LOCKFILE=$(gh api -H "Accept: application/vnd.github.v3.raw" "/repos/heroku/languages-github-actions/contents/Cargo.lock?ref=${{ inputs.languages_cli_branch }}")
+          LIBCNB_PACKAGE_VERSION=$(echo $LOCKFILE | yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version')
           echo $LIBCNB_PACKAGE_VERSION
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
