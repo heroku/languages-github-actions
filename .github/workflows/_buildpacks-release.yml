@@ -78,6 +78,8 @@ jobs:
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           LOCKFILE=$(gh api -H "Accept: application/vnd.github.v3.raw" "/repos/heroku/languages-github-actions/contents/Cargo.lock?ref=${{ inputs.languages_cli_branch }}")
           LIBCNB_PACKAGE_VERSION=$(echo $LOCKFILE | yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version')
