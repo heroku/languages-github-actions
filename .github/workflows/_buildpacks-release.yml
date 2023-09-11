@@ -82,11 +82,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           LOCKFILE="${{ runner.temp }}/Cargo-$RANDOM.lock"
-          echo $LOCKFILE
           gh api -H "Accept: application/vnd.github.v3.raw" "/repos/heroku/languages-github-actions/contents/Cargo.lock?ref=${{ inputs.languages_cli_branch }}" > $LOCKFILE
-          cat $LOCKFILE
           LIBCNB_PACKAGE_VERSION=$(yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' $LOCKFILE)
-          echo $LIBCNB_PACKAGE_VERSION
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
       - name: Install Languages CLI
