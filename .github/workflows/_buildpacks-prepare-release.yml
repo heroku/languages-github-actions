@@ -35,6 +35,11 @@ on:
         type: string
         required: false
         default: pub-hk-ubuntu-22.04-small
+      languages_cli_branch:
+        description: The branch to install the Languages CLI from (FOR TESTING)
+        type: string
+        required: false
+        default: main
     secrets:
       app_private_key:
         description: Private key of GitHub application (Linguist)
@@ -59,14 +64,10 @@ jobs:
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
 
-      # This will ensure commits made from this workflow are attributed to the GH application user
-      - name: Configure git
-        run: |
-          git config --global user.name ${{ inputs.app_username }}
-          git config --global user.email ${{ inputs.app_email }}
-
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        with:
+          branch: ${{ inputs.languages_cli_branch }}
 
       - name: Bump versions and update changelogs
         id: prepare
@@ -93,6 +94,9 @@ jobs:
             ${{ steps.generate-changelog.outputs.changelog }}
           branch: prepare-release
           delete-branch: true
+          # This will ensure commits made from this workflow are attributed to the GH application user
+          committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
+          author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
 
       - name: Configure pull request
         if: steps.pr.outputs.pull-request-operation == 'created'
