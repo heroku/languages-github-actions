@@ -35,6 +35,11 @@ on:
         type: string
         required: false
         default: pub-hk-ubuntu-22.04-small
+      languages_cli_branch:
+        description: The branch to install the Languages CLI from (FOR TESTING)
+        type: string
+        required: false
+        default: main
     secrets:
       app_private_key:
         description: Private key of GitHub application (Linguist)
@@ -61,6 +66,8 @@ jobs:
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        with:
+          branch: ${{ inputs.languages_cli_branch }}
 
       - name: Bump versions and update changelogs
         id: prepare
