@@ -1,8 +1,6 @@
 name: _buildpacks-release
-
 env:
   CARGO_TERM_COLOR: always
-
 on:
   workflow_call:
     inputs:
@@ -48,7 +46,6 @@ on:
       docker_hub_token:
         required: true
         description: The token to login to Docker Hub with
-
 jobs:
   compile:
     name: Compile Buildpacks
@@ -62,19 +59,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-
       - name: Install musl-tools
         run: sudo apt-get install musl-tools --no-install-recommends
-
       - name: Update Rust toolchain
         run: rustup update
-
       - name: Install Rust linux-musl target
         run: rustup target add x86_64-unknown-linux-musl
-
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.6.2
-
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
@@ -85,25 +77,20 @@ jobs:
             | yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' \
           )
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
-
       - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@v0.3.0
         with:
           branch: ${{ inputs.languages_cli_branch }}
           update_rust_toolchain: false
-
       - name: Package buildpacks
         id: libcnb-package
         run: cargo libcnb package --release
-
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
         run: actions generate-buildpack-matrix
-
       - name: Generate changelog
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
-
       - name: Temporary fix for bash-based buildpacks
         run: |
           buildpacks='${{ steps.generate-buildpack-matrix.outputs.buildpacks }}'
@@ -141,13 +128,11 @@ jobs:
               fi
             done
           done
-
       - name: Cache buildpacks
         uses: actions/cache/save@v3
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
           path: target/buildpack
-
   publish-docker:
     name: Publish → Docker - ${{ matrix.buildpack_id }}
     needs: [compile]
@@ -165,13 +150,10 @@ jobs:
           path: target/buildpack
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
-
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.4.0
-
       - name: Create Docker Image
         run: pack buildpack package ${{ matrix.buildpack_id }} --config ${{ matrix.buildpack_output_dir }}/package.toml -v
-
       - name: Login to Docker Hub
         if: inputs.dry_run == false
         uses: docker/login-action@v2.2.0
@@ -179,17 +161,14 @@ jobs:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
-
       - name: Check if version is already on Docker Hub
         id: check
         run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-
       - name: Tag and publish buildpack
         if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
         run: |
           docker tag ${{ matrix.buildpack_id }} ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
           docker push ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
-
   publish-github:
     name: Publish → GitHub Release
     needs: [compile]
@@ -203,10 +182,8 @@ jobs:
           path: target/buildpack
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
-
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.4.0
-
       - name: Generate CNB files
         run: |
           for buildpack in $(jq -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
@@ -214,20 +191,17 @@ jobs:
             output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
             pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
           done
-
       - name: Get token for GitHub application (Linguist)
         uses: heroku/use-app-token-action@main
         id: generate-token
         with:
           app_id: ${{ inputs.app_id }}
           private_key: ${{ secrets.app_private_key }}
-
       - name: Check if release exists
         id: check
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
         run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
-
       - name: Create GitHub Release
         if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
         uses: softprops/action-gh-release@v0.1.15
@@ -237,7 +211,6 @@ jobs:
           body: ${{ needs.compile.outputs.changelog }}
           files: "*.cnb"
           fail_on_unmatched_files: true
-
   publish-cnb:
     name: Publish → CNB Registry - ${{ matrix.buildpack_id }}
     needs: [compile, publish-docker]
@@ -249,18 +222,15 @@ jobs:
     steps:
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@v5.4.0
-
       - name: Check if version is already in the registry
         id: check
         run: |
           export URL="https://registry.buildpacks.io/api/v1/buildpacks/${{ matrix.buildpack_id }}/${{ matrix.buildpack_version }}"
           export EXISTS=$(if [ "$( curl -s -o /dev/null -I -w "%{http_code}" "${URL}")" = "200" ]; then echo 'true'; else echo 'false'; fi)
           echo "published_to_cnb_registry=${EXISTS}" >> $GITHUB_OUTPUT
-
       - name: Calculate the buildpack image digest
         id: digest
         run: echo "value=$(crane digest ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }})" >> "$GITHUB_OUTPUT"
-
       - name: Register the new version with the CNB Buildpack Registry
         if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'
         uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.4.0
@@ -269,7 +239,6 @@ jobs:
           id: ${{ matrix.buildpack_id }}
           version: ${{ matrix.buildpack_version }}
           address: ${{ matrix.docker_repository }}@${{ steps.digest.outputs.value }}
-
   update-builder:
     name: Update Builder
     needs: [compile, publish-docker, publish-cnb, publish-github]
@@ -281,12 +250,10 @@ jobs:
         with:
           app_id: ${{ inputs.app_id }}
           private_key: ${{ secrets.app_private_key }}
-
       - name: Checkout
         uses: actions/checkout@v3
         with:
           path: ./buildpacks
-
       - name: Checkout builder repository
         uses: actions/checkout@v3
         with:
@@ -295,22 +262,18 @@ jobs:
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
-
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@v5.4.0
-
       - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@v0.3.0
         with:
           branch: ${{ inputs.languages_cli_branch }}
-
       - name: Update Builder
         # The dry run check is performed here because the update process requires a published
         # image to exist in order to calculate a digest with `crane`. Adding the check here
         # means no files will be modified and so no PR will be created later.
         if: inputs.dry_run == false
         run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./builder --builders builder-22,buildpacks-20
-
       - name: Create Pull Request
         id: pr
         uses: peter-evans/create-pull-request@v5.0.2
@@ -328,7 +291,6 @@ jobs:
           # This will ensure commits made from this workflow are attributed to the GH application user
           committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
           author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
-
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash --repo heroku/builder "${{ steps.pr.outputs.pull-request-number }}"
