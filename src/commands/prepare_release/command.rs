@@ -21,7 +21,7 @@ type Result<T> = std::result::Result<T, Error>;
 #[command(author, version, about = "Bumps the version of each detected buildpack and adds an entry for any unreleased changes from the changelog", long_about = None)]
 pub(crate) struct PrepareReleaseArgs {
     #[arg(long)]
-    pub(crate) working_directory: Option<PathBuf>,
+    pub(crate) working_dir: Option<PathBuf>,
     #[arg(long, value_enum)]
     pub(crate) bump: BumpCoordinate,
     #[arg(long)]
@@ -48,8 +48,7 @@ struct ChangelogFile {
 }
 
 pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
-    let working_dir =
-        get_working_directory(args.working_directory).map_err(Error::GetWorkingDir)?;
+    let working_dir = get_working_directory(args.working_dir).map_err(Error::GetWorkingDir)?;
 
     let repository_url = URI::try_from(args.repository_url.as_str())
         .map(URI::into_owned)

@@ -95,11 +95,11 @@ jobs:
 
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release --package-directory ${{ env.PACKAGE_DIR }}
+        run: cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix --package-directory ${{ env.PACKAGE_DIR }}
+        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Generate changelog
         id: generate-changelog

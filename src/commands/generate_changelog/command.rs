@@ -14,11 +14,11 @@ type Result<T> = std::result::Result<T, Error>;
 #[command(author, version, about = "Generates a changelog from one or more buildpacks in a project", long_about = None, disable_version_flag = true)]
 pub(crate) struct GenerateChangelogArgs {
     #[arg(long)]
-    pub(crate) working_directory: Option<PathBuf>,
+    pub(crate) working_dir: Option<PathBuf>,
     #[arg(long, group = "section")]
-    unreleased: bool,
+    pub(crate) unreleased: bool,
     #[arg(long, group = "section")]
-    version: Option<String>,
+    pub(crate) version: Option<String>,
 }
 
 enum ChangelogEntryType {
@@ -34,7 +34,7 @@ enum ChangelogEntry {
 
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let working_dir =
-        get_working_directory(args.working_directory).map_err(Error::GetWorkingDir)?;
+        get_working_directory(args.working_dir).map_err(Error::GetWorkingDir)?;
 
     let buildpack_dirs =
         find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;

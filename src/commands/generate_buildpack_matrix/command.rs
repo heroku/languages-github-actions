@@ -19,18 +19,18 @@ type Result<T> = std::result::Result<T, Error>;
 #[command(author, version, about = "Generates a JSON list of buildpack information for each buildpack detected", long_about = None)]
 pub(crate) struct GenerateBuildpackMatrixArgs {
     #[arg(long)]
-    pub(crate) working_directory: Option<PathBuf>,
+    pub(crate) working_dir: Option<PathBuf>,
     #[arg(long)]
-    pub(crate) package_directory: PathBuf,
+    pub(crate) package_dir: PathBuf,
     #[arg(long)]
-    pub release: Option<bool>,
+    pub(crate) release: Option<bool>,
     #[arg(long, default_value = "x86_64-unknown-linux-musl")]
-    pub target: String,
+    pub(crate) target: String,
 }
 
 pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
     let working_dir =
-        get_working_directory(args.working_directory).map_err(Error::GetWorkingDirectory)?;
+        get_working_directory(args.working_dir).map_err(Error::GetWorkingDirectory)?;
 
     let cargo_profile = if args.release.unwrap_or(true) {
         CargoProfile::Release
@@ -39,7 +39,7 @@ pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
     };
 
     let packaged_buildpack_dir_resolver = create_packaged_buildpack_dir_resolver(
-        &args.package_directory,
+        &args.package_dir,
         cargo_profile,
         &args.target,
     );
