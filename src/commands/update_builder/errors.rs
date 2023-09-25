@@ -1,13 +1,14 @@
-use crate::buildpacks::CalculateDigestError;
-use libcnb_package::ReadBuildpackDataError;
+use crate::buildpacks::{
+    CalculateDigestError, FindReleasableBuildpacksError, ReadBuildpackDescriptorError,
+};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
     GetCurrentDir(std::io::Error),
-    FindingBuildpacks(PathBuf, std::io::Error),
-    ReadingBuildpackData(ReadBuildpackDataError),
+    FindReleasableBuildpacks(FindReleasableBuildpacksError),
+    ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
     NoBuildpacks(PathBuf),
     ReadingBuilder(PathBuf, std::io::Error),
     ParsingBuilder(PathBuf, toml_edit::TomlError),
@@ -61,31 +62,13 @@ impl Display for Error {
                 )
             }
 
-            Error::FindingBuildpacks(path, error) => {
-                write!(
-                    f,
-                    "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-                    path.display()
-                )
+            Error::FindReleasableBuildpacks(error) => {
+                write!(f, "{error}")
             }
 
-            Error::ReadingBuildpackData(error) => match error {
-                ReadBuildpackDataError::ReadingBuildpack { path, source } => {
-                    write!(
-                        f,
-                        "Failed to read buildpack\nPath: {}\nError: {source}",
-                        path.display()
-                    )
-                }
-
-                ReadBuildpackDataError::ParsingBuildpack { path, source } => {
-                    write!(
-                        f,
-                        "Failed to parse buildpack\nPath: {}\nError: {source}",
-                        path.display()
-                    )
-                }
-            },
+            Error::ReadBuildpackDescriptor(error) => {
+                write!(f, "{error}")
+            }
 
             Error::NoBuildpacks(path) => {
                 write!(

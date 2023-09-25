@@ -1,5 +1,7 @@
+use libcnb_common::toml_file::{read_toml_file, TomlFileError};
 use libcnb_data::buildpack::BuildpackDescriptor;
-use libcnb_package::{find_buildpack_dirs, GenericMetadata};
+use libcnb_package::find_buildpack_dirs;
+use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
@@ -26,11 +28,11 @@ pub(crate) fn calculate_digest(digest_url: &String) -> Result<String, CalculateD
 }
 
 pub(crate) fn read_image_repository_metadata(
-    buildpack_descriptor: &BuildpackDescriptor<GenericMetadata>,
+    buildpack_descriptor: &BuildpackDescriptor,
 ) -> Option<String> {
     let metadata = match buildpack_descriptor {
-        BuildpackDescriptor::Single(descriptor) => &descriptor.metadata,
-        BuildpackDescriptor::Meta(descriptor) => &descriptor.metadata,
+        BuildpackDescriptor::Component(descriptor) => &descriptor.metadata,
+        BuildpackDescriptor::Composite(descriptor) => &descriptor.metadata,
     };
 
     #[allow(clippy::redundant_closure_for_method_calls)]
@@ -42,20 +44,78 @@ pub(crate) fn read_image_repository_metadata(
         .map(|value| value.to_string())
 }
 
-pub(crate) fn find_releasable_buildpacks(starting_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
-    find_buildpack_dirs(starting_dir, &[starting_dir.join("target")]).map(|results| {
-        results
-            .into_iter()
-            .filter(|dir| dir.join("CHANGELOG.md").exists())
-            .collect()
-    })
+pub(crate) fn find_releasable_buildpacks(
+    starting_dir: &Path,
+) -> Result<Vec<PathBuf>, FindReleasableBuildpacksError> {
+    find_buildpack_dirs(starting_dir)
+        .map(|results| {
+            results
+                .into_iter()
+                .filter(|dir| dir.join("CHANGELOG.md").exists())
+                .collect()
+        })
+        .map_err(|e| FindReleasableBuildpacksError(starting_dir.to_path_buf(), e))
+}
+#[derive(Debug)]
+pub(crate) struct FindReleasableBuildpacksError(PathBuf, ignore::Error);
+
+impl Display for FindReleasableBuildpacksError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let path = &self.0;
+        let error = &self.1;
+        write!(
+            f,
+            "I/O error while finding buildpacks\nPath: {}\nError: {error}",
+            path.display()
+        )
+    }
+}
+
+pub(crate) fn read_buildpack_descriptor(
+    dir: &Path,
+) -> Result<BuildpackDescriptor, ReadBuildpackDescriptorError> {
+    let buildpack_path = dir.join("buildpack.toml");
+    read_toml_file::<BuildpackDescriptor>(&buildpack_path)
+        .map_err(|e| ReadBuildpackDescriptorError(buildpack_path, e))
+}
+
+#[derive(Debug)]
+pub(crate) struct ReadBuildpackDescriptorError(PathBuf, TomlFileError);
+
+impl Display for ReadBuildpackDescriptorError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let buildpack_path = &self.0;
+        let error = &self.1;
+        match error {
+            TomlFileError::IoError(source) => {
+                write!(
+                    f,
+                    "Failed to read buildpack\nPath: {}\nError: {source}",
+                    buildpack_path.display()
+                )
+            }
+            TomlFileError::TomlDeserializationError(source) => {
+                write!(
+                    f,
+                    "Failed to deserialize buildpack\nPath: {}\nError: {source}",
+                    buildpack_path.display()
+                )
+            }
+            TomlFileError::TomlSerializationError(source) => {
+                write!(
+                    f,
+                    "Failed to serialize buildpack\nPath: {}\nError: {source}",
+                    buildpack_path.display()
+                )
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::buildpacks::read_image_repository_metadata;
     use libcnb_data::buildpack::BuildpackDescriptor;
-    use libcnb_package::GenericMetadata;
 
     #[test]
     fn test_read_image_repository_metadata() {
@@ -73,8 +133,7 @@ id = "*"
 repository = "repository value"
 "#;
 
-        let buildpack_descriptor =
-            toml::from_str::<BuildpackDescriptor<GenericMetadata>>(data).unwrap();
+        let buildpack_descriptor = toml::from_str::<BuildpackDescriptor>(data).unwrap();
         assert_eq!(
             read_image_repository_metadata(&buildpack_descriptor),
             Some("repository value".to_string())
@@ -94,8 +153,7 @@ version = "0.0.1"
 id = "*"
 "#;
 
-        let buildpack_descriptor =
-            toml::from_str::<BuildpackDescriptor<GenericMetadata>>(data).unwrap();
+        let buildpack_descriptor = toml::from_str::<BuildpackDescriptor>(data).unwrap();
         assert_eq!(read_image_repository_metadata(&buildpack_descriptor), None);
     }
 }

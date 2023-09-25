@@ -1,40 +1,39 @@
-use crate::github::actions::SetOutputError;
-use libcnb_package::ReadBuildpackDataError;
+use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorError};
+use crate::commands::GetWorkingDirectoryError;
+use crate::github::actions::SetActionOutputError;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    GetCurrentDir(std::io::Error),
-    FindingBuildpacks(PathBuf, std::io::Error),
-    ReadingBuildpackData(ReadBuildpackDataError),
+    GetWorkingDirectory(GetWorkingDirectoryError),
+    FindReleasableBuildpacks(FindReleasableBuildpacksError),
+    ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
     MissingDockerRepositoryMetadata(PathBuf),
     SerializingJson(serde_json::Error),
     FixedVersion(HashSet<String>),
-    SetActionOutput(SetOutputError),
+    SetActionOutput(SetActionOutputError),
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::GetCurrentDir(error) => {
-                write!(f, "Failed to get current directory\nError: {error}")
+            Error::GetWorkingDirectory(error) => {
+                write!(f, "{error}")
             }
 
-            Error::FindingBuildpacks(path, error) => {
-                write!(
-                    f,
-                    "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-                    path.display()
-                )
+            Error::FindReleasableBuildpacks(error) => {
+                write!(f, "{error}")
             }
 
-            Error::SetActionOutput(set_output_error) => match set_output_error {
-                SetOutputError::Opening(error) | SetOutputError::Writing(error) => {
-                    write!(f, "Could not write action output\nError: {error}")
-                }
-            },
+            Error::SetActionOutput(error) => {
+                write!(f, "{error}")
+            }
+
+            Error::ReadBuildpackDescriptor(error) => {
+                write!(f, "{error}")
+            }
 
             Error::SerializingJson(error) => {
                 write!(
@@ -42,23 +41,6 @@ impl Display for Error {
                     "Could not serialize buildpacks into json\nError: {error}"
                 )
             }
-
-            Error::ReadingBuildpackData(error) => match error {
-                ReadBuildpackDataError::ReadingBuildpack { path, source } => {
-                    write!(
-                        f,
-                        "Failed to read buildpack\nPath: {}\nError: {source}",
-                        path.display()
-                    )
-                }
-                ReadBuildpackDataError::ParsingBuildpack { path, source } => {
-                    write!(
-                        f,
-                        "Failed to parse buildpack\nPath: {}\nError: {source}",
-                        path.display()
-                    )
-                }
-            },
 
             Error::MissingDockerRepositoryMetadata(path) => {
                 write!(

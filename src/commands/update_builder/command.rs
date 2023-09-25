@@ -1,11 +1,13 @@
 use crate::buildpacks::{
-    calculate_digest, find_releasable_buildpacks, read_image_repository_metadata,
+    calculate_digest, find_releasable_buildpacks, read_buildpack_descriptor,
+    read_image_repository_metadata,
 };
+use crate::commands::resolve_path;
 use crate::update_builder::errors::Error;
 use clap::Parser;
 use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
-use libcnb_package::read_buildpack_data;
-use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 use toml_edit::{value, ArrayOfTables, Document, Item};
 use uriparse::URI;
@@ -16,9 +18,9 @@ type Result<T> = std::result::Result<T, Error>;
 #[command(author, version, about = "Updates all references to a buildpack in heroku/builder for the given list of builders", long_about = None)]
 pub(crate) struct UpdateBuilderArgs {
     #[arg(long)]
-    pub(crate) repository_path: String,
+    pub(crate) repository_path: PathBuf,
     #[arg(long)]
-    pub(crate) builder_repository_path: String,
+    pub(crate) builder_repository_path: PathBuf,
     #[arg(long, required = true, value_delimiter = ',', num_args = 1..)]
     pub(crate) builders: Vec<String>,
 }
@@ -30,15 +32,18 @@ struct BuilderFile {
 
 pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
-    let repository_path = resolve_path(PathBuf::from(args.repository_path), &current_dir);
-    let builder_repository_path =
-        resolve_path(PathBuf::from(args.builder_repository_path), &current_dir);
+    let repository_path = resolve_path(args.repository_path, &current_dir);
+    let builder_repository_path = resolve_path(args.builder_repository_path, &current_dir);
 
     let buildpacks = find_releasable_buildpacks(&repository_path)
-        .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?
+        .map_err(Error::FindReleasableBuildpacks)?
         .into_iter()
-        .map(|dir| read_buildpack_data(dir).map_err(Error::ReadingBuildpackData))
-        .collect::<Result<Vec<_>>>()?;
+        .map(|dir| {
+            read_buildpack_descriptor(&dir)
+                .map_err(Error::ReadBuildpackDescriptor)
+                .map(|buildpack_descriptor| (dir, buildpack_descriptor))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
 
     if buildpacks.is_empty() {
         Err(Error::NoBuildpacks(repository_path))?;
@@ -57,17 +62,16 @@ pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
     }
 
     for mut builder_file in builder_files {
-        for buildpack_data in &buildpacks {
-            let buildpack_path = &buildpack_data.buildpack_descriptor_path;
+        for (buildpack_dir, buildpack_descriptor) in &buildpacks {
+            let buildpack_path = buildpack_dir.join("buildpack.toml");
 
-            let buildpack_id = &buildpack_data.buildpack_descriptor.buildpack().id;
+            let buildpack_id = &buildpack_descriptor.buildpack().id;
 
-            let buildpack_version = &buildpack_data.buildpack_descriptor.buildpack().version;
+            let buildpack_version = &buildpack_descriptor.buildpack().version;
 
-            let docker_repository =
-                read_image_repository_metadata(&buildpack_data.buildpack_descriptor).ok_or(
-                    Error::MissingDockerRepositoryMetadata(buildpack_path.clone()),
-                )?;
+            let docker_repository = read_image_repository_metadata(buildpack_descriptor).ok_or(
+                Error::MissingDockerRepositoryMetadata(buildpack_path.clone()),
+            )?;
 
             let buildpack_uri =
                 calculate_digest(&format!("{docker_repository}:{buildpack_version}"))
@@ -89,14 +93,6 @@ pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn resolve_path(path: PathBuf, current_dir: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path
-    } else {
-        current_dir.join(path)
-    }
 }
 
 fn read_builder_file(path: PathBuf) -> Result<BuilderFile> {

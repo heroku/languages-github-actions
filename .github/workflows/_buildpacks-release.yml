@@ -2,6 +2,7 @@ name: _buildpacks-release
 
 env:
   CARGO_TERM_COLOR: always
+  PACKAGE_DIR: ./packaged
 
 on:
   workflow_call:
@@ -98,7 +99,7 @@ jobs:
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix
+        run: actions generate-buildpack-matrix --package-directory ${{ env.PACKAGE_DIR }}
 
       - name: Generate changelog
         id: generate-changelog
@@ -146,7 +147,7 @@ jobs:
         uses: actions/cache/save@v3
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: ${{ env.PACKAGE_DIR }}
 
   publish-docker:
     name: Publish → Docker - ${{ matrix.buildpack_id }}
@@ -162,7 +163,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: ${{ env.PACKAGE_DIR }}
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
@@ -200,7 +201,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: ${{ env.PACKAGE_DIR }}
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 

@@ -1,5 +1,6 @@
 use crate::buildpacks::find_releasable_buildpacks;
 use crate::changelog::{generate_release_declarations, Changelog, ReleaseEntry};
+use crate::commands::get_working_directory;
 use crate::commands::prepare_release::errors::Error;
 use crate::github::actions;
 use chrono::{DateTime, Utc};
@@ -19,6 +20,8 @@ type Result<T> = std::result::Result<T, Error>;
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Bumps the version of each detected buildpack and adds an entry for any unreleased changes from the changelog", long_about = None)]
 pub(crate) struct PrepareReleaseArgs {
+    #[arg(long)]
+    pub(crate) working_directory: Option<PathBuf>,
     #[arg(long, value_enum)]
     pub(crate) bump: BumpCoordinate,
     #[arg(long)]
@@ -45,10 +48,11 @@ struct ChangelogFile {
 }
 
 pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
-    let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
+    let working_dir =
+        get_working_directory(args.working_directory).map_err(Error::GetWorkingDir)?;
 
     let repository_url = URI::try_from(args.repository_url.as_str())
-        .map(uriparse::URI::into_owned)
+        .map(URI::into_owned)
         .map_err(|e| Error::InvalidRepositoryUrl(args.repository_url.clone(), e))?;
 
     let declarations_starting_version = args
@@ -60,11 +64,11 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
         })
         .transpose()?;
 
-    let buildpack_dirs = find_releasable_buildpacks(&current_dir)
-        .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?;
+    let buildpack_dirs =
+        find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;
 
     if buildpack_dirs.is_empty() {
-        Err(Error::NoBuildpacksFound(current_dir))?;
+        Err(Error::NoBuildpacksFound(working_dir))?;
     }
 
     let buildpack_files = buildpack_dirs

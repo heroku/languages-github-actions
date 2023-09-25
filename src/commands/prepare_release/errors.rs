@@ -1,5 +1,7 @@
+use crate::buildpacks::FindReleasableBuildpacksError;
 use crate::changelog::ChangelogError;
-use crate::github::actions::SetOutputError;
+use crate::commands::GetWorkingDirectoryError;
+use crate::github::actions::SetActionOutputError;
 use libcnb_data::buildpack::BuildpackVersion;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -8,13 +10,14 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    GetCurrentDir(io::Error),
+    GetWorkingDir(GetWorkingDirectoryError),
+    FindReleasableBuildpacks(FindReleasableBuildpacksError),
+    SetActionOutput(SetActionOutputError),
     InvalidRepositoryUrl(String, uriparse::URIError),
     InvalidDeclarationsStartingVersion(String, semver::Error),
     NoBuildpacksFound(PathBuf),
     NotAllVersionsMatch(HashMap<PathBuf, BuildpackVersion>),
     NoFixedVersion,
-    FindingBuildpacks(PathBuf, io::Error),
     ReadingChangelog(PathBuf, io::Error),
     ParsingChangelog(PathBuf, ChangelogError),
     ReadingBuildpack(PathBuf, io::Error),
@@ -24,15 +27,20 @@ pub(crate) enum Error {
     InvalidBuildpackVersion(PathBuf, String),
     WritingBuildpack(PathBuf, io::Error),
     WritingChangelog(PathBuf, io::Error),
-    SetActionOutput(SetOutputError),
 }
 
 impl Display for Error {
     #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::GetCurrentDir(error) => {
-                write!(f, "Failed to get current directory\nError: {error}")
+            Error::GetWorkingDir(error) => {
+                write!(f, "{error}")
+            }
+            Error::FindReleasableBuildpacks(error) => {
+                write!(f, "{error}")
+            }
+            Error::SetActionOutput(error) => {
+                write!(f, "{error}")
             }
             Error::InvalidRepositoryUrl(value, error) => {
                 write!(
@@ -59,13 +67,6 @@ impl Display for Error {
             }
             Error::NoFixedVersion => {
                 write!(f, "No fixed version could be determined")
-            }
-            Error::FindingBuildpacks(path, error) => {
-                write!(
-                    f,
-                    "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-                    path.display()
-                )
             }
             Error::ReadingBuildpack(path, error) => {
                 write!(
@@ -109,11 +110,6 @@ impl Display for Error {
                     path.display()
                 )
             }
-            Error::SetActionOutput(set_output_error) => match set_output_error {
-                SetOutputError::Opening(error) | SetOutputError::Writing(error) => {
-                    write!(f, "Could not write action output\nError: {error}")
-                }
-            },
             Error::MissingRequiredField(path, field) => {
                 write!(
                     f,

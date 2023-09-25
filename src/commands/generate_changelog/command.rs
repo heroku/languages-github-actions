@@ -1,10 +1,10 @@
-use crate::buildpacks::find_releasable_buildpacks;
+use crate::buildpacks::{find_releasable_buildpacks, read_buildpack_descriptor};
 use crate::changelog::Changelog;
 use crate::commands::generate_changelog::errors::Error;
+use crate::commands::get_working_directory;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::BuildpackId;
-use libcnb_package::read_buildpack_data;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
@@ -13,12 +13,12 @@ type Result<T> = std::result::Result<T, Error>;
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Generates a changelog from one or more buildpacks in a project", long_about = None, disable_version_flag = true)]
 pub(crate) struct GenerateChangelogArgs {
+    #[arg(long)]
+    pub(crate) working_directory: Option<PathBuf>,
     #[arg(long, group = "section")]
     unreleased: bool,
     #[arg(long, group = "section")]
     version: Option<String>,
-    #[arg(long)]
-    path: Option<String>,
 }
 
 enum ChangelogEntryType {
@@ -34,10 +34,10 @@ enum ChangelogEntry {
 
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let working_dir =
-        get_working_dir_from(args.path.map(PathBuf::from)).map_err(Error::GetWorkingDir)?;
+        get_working_directory(args.working_directory).map_err(Error::GetWorkingDir)?;
 
-    let buildpack_dirs = find_releasable_buildpacks(&working_dir)
-        .map_err(|e| Error::FindingBuildpacks(working_dir.clone(), e))?;
+    let buildpack_dirs =
+        find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;
 
     let changelog_entry_type = match args.version {
         Some(version) => ChangelogEntryType::Version(version),
@@ -47,9 +47,9 @@ pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let changes_by_buildpack = buildpack_dirs
         .iter()
         .map(|dir| {
-            read_buildpack_data(dir)
-                .map_err(Error::GetBuildpackId)
-                .map(|data| data.buildpack_descriptor.buildpack().id.clone())
+            read_buildpack_descriptor(dir)
+                .map_err(Error::ReadBuildpackDescriptor)
+                .map(|buildpack_descriptor| buildpack_descriptor.buildpack().id.clone())
                 .and_then(|buildpack_id| {
                     read_changelog_entry(&dir.join("CHANGELOG.md"), &changelog_entry_type)
                         .map(|contents| (buildpack_id, contents))
@@ -89,20 +89,6 @@ fn read_changelog_entry(
                     }
                 })
         }
-    })
-}
-
-fn get_working_dir_from(path: Option<PathBuf>) -> std::io::Result<PathBuf> {
-    let current_dir = std::env::current_dir()?;
-    Ok(match path {
-        Some(value) => {
-            if value.is_absolute() {
-                value
-            } else {
-                current_dir.join(value)
-            }
-        }
-        None => current_dir,
     })
 }
 
