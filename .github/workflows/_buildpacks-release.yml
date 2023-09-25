@@ -95,7 +95,7 @@ jobs:
 
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release
+        run: cargo libcnb package --release --package-directory ${{ env.PACKAGE_DIR }}
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
