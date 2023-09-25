@@ -253,9 +253,12 @@ jobs:
       - name: Check if version is already in the registry
         id: check
         run: |
-          export URL="https://registry.buildpacks.io/api/v1/buildpacks/${{ matrix.buildpack_id }}/${{ matrix.buildpack_version }}"
-          export EXISTS=$(if [ "$( curl -s -o /dev/null -I -w "%{http_code}" "${URL}")" = "200" ]; then echo 'true'; else echo 'false'; fi)
-          echo "published_to_cnb_registry=${EXISTS}" >> $GITHUB_OUTPUT
+          registry_url="https://registry.buildpacks.io/api/v1/buildpacks/${{ matrix.buildpack_id }}/${{ matrix.buildpack_version }}"
+          if curl --head --silent --show-error --fail --retry 1 --retry-all-errors --connect-timeout 10 --max-time 60 "${registry_url}"; then
+            echo "published_to_cnb_registry=true" >> $GITHUB_OUTPUT
+          else
+            echo "published_to_cnb_registry=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Calculate the buildpack image digest
         id: digest
