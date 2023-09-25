@@ -1,12 +1,13 @@
 use crate::buildpacks::{
     CalculateDigestError, FindReleasableBuildpacksError, ReadBuildpackDescriptorError,
 };
+use crate::commands::ResolvePathError;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    GetCurrentDir(std::io::Error),
+    ResolvePath(ResolvePathError),
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
     NoBuildpacks(PathBuf),
@@ -22,8 +23,8 @@ pub(crate) enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::GetCurrentDir(error) => {
-                write!(f, "Could not get the current directory\nError: {error}")
+            Error::ResolvePath(error) => {
+                write!(f, "{error}")
             }
 
             Error::ReadingBuilder(path, error) => {

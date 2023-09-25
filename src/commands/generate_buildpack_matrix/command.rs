@@ -2,7 +2,7 @@ use crate::buildpacks::{
     find_releasable_buildpacks, read_buildpack_descriptor, read_image_repository_metadata,
 };
 use crate::commands::generate_buildpack_matrix::errors::Error;
-use crate::commands::get_working_directory;
+use crate::commands::resolve_path;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackId};
@@ -29,8 +29,9 @@ pub(crate) struct GenerateBuildpackMatrixArgs {
 }
 
 pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
-    let working_dir =
-        get_working_directory(args.working_dir).map_err(Error::GetWorkingDirectory)?;
+    let working_dir = resolve_path(args.working_dir).map_err(Error::ResolvePath)?;
+
+    let package_dir = resolve_path(Some(args.package_dir)).map_err(Error::ResolvePath)?;
 
     let cargo_profile = if args.release.unwrap_or(true) {
         CargoProfile::Release
@@ -38,11 +39,8 @@ pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
         CargoProfile::Dev
     };
 
-    let packaged_buildpack_dir_resolver = create_packaged_buildpack_dir_resolver(
-        &args.package_dir,
-        cargo_profile,
-        &args.target,
-    );
+    let packaged_buildpack_dir_resolver =
+        create_packaged_buildpack_dir_resolver(&package_dir, cargo_profile, &args.target);
 
     let buildpack_dirs =
         find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;

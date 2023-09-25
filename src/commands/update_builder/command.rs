@@ -31,9 +31,9 @@ struct BuilderFile {
 }
 
 pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
-    let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
-    let repository_path = resolve_path(args.repository_path, &current_dir);
-    let builder_repository_path = resolve_path(args.builder_repository_path, &current_dir);
+    let repository_path = resolve_path(Some(args.repository_path)).map_err(Error::ResolvePath)?;
+    let builder_repository_path =
+        resolve_path(Some(args.builder_repository_path)).map_err(Error::ResolvePath)?;
 
     let buildpacks = find_releasable_buildpacks(&repository_path)
         .map_err(Error::FindReleasableBuildpacks)?

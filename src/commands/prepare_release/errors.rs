@@ -1,6 +1,6 @@
 use crate::buildpacks::FindReleasableBuildpacksError;
 use crate::changelog::ChangelogError;
-use crate::commands::GetWorkingDirectoryError;
+use crate::commands::ResolvePathError;
 use crate::github::actions::SetActionOutputError;
 use libcnb_data::buildpack::BuildpackVersion;
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    GetWorkingDir(GetWorkingDirectoryError),
+    ResolvePath(ResolvePathError),
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     SetActionOutput(SetActionOutputError),
     InvalidRepositoryUrl(String, uriparse::URIError),
@@ -33,7 +33,7 @@ impl Display for Error {
     #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::GetWorkingDir(error) => {
+            Error::ResolvePath(error) => {
                 write!(f, "{error}")
             }
             Error::FindReleasableBuildpacks(error) => {

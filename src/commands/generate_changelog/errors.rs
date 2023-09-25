@@ -1,13 +1,13 @@
 use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorError};
 use crate::changelog::ChangelogError;
-use crate::commands::GetWorkingDirectoryError;
+use crate::commands::ResolvePathError;
 use crate::github::actions::SetActionOutputError;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    GetWorkingDir(GetWorkingDirectoryError),
+    ResolvePath(ResolvePathError),
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
     ReadingChangelog(PathBuf, std::io::Error),
@@ -18,7 +18,7 @@ pub(crate) enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::GetWorkingDir(error) => {
+            Error::ResolvePath(error) => {
                 write!(f, "{error}")
             }
 
