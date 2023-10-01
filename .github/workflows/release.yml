@@ -45,7 +45,7 @@ jobs:
         run: rustup update
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2.6.2
+        uses: Swatinem/rust-cache@v2.7.0
 
       - name: Install cargo-bump
         run: cargo install cargo-bump
