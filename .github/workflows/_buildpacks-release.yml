@@ -59,7 +59,7 @@ jobs:
       changelog: ${{ steps.generate-changelog.outputs.changelog }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
 
@@ -286,12 +286,12 @@ jobs:
           private_key: ${{ secrets.app_private_key }}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ./buildpacks
 
       - name: Checkout builder repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: heroku/builder
           path: ./builder
