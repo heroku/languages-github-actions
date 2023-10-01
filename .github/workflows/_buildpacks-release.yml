@@ -73,7 +73,7 @@ jobs:
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2.6.2
+        uses: Swatinem/rust-cache@v2.7.0
 
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
