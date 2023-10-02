@@ -100,7 +100,7 @@ Performs the release steps for one or more buildpacks by:
     > repository = "{repository_url}"
     > ```
   * Retrieving the OCI image url published to Docker Hub and registering this with the CNB Registry
-* Once all buildpacks have been published, all the buildpack references found in [heroku/builder](https://github.com/heroku/builder)
+* Once all buildpacks have been published, all the buildpack references found in [heroku/cnb-builder-images](https://github.com/heroku/cnb-builder-images)
   are updated for the given list of builders and a pull request is opened containing all the changes to be committed.
 
 You can pin to:
@@ -185,6 +185,6 @@ Commands:
   generate-buildpack-matrix  Generates a JSON list of buildpack information for each buildpack detected
   generate-changelog         Generates a changelog from one or more buildpacks in a project
   prepare-release            Bumps the version of each detected buildpack and adds an entry for any unreleased changes from the changelog
-  update-builder             Updates all references to a buildpack in heroku/builder for the given list of builders
+  update-builder             Updates all references to a buildpack in heroku/cnb-builder-images for the given list of builders
   help                       Print this message or the help of the given subcommand(s)
 ```
