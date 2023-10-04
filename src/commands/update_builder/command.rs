@@ -15,7 +15,7 @@ use uriparse::URI;
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Updates all references to a buildpack in heroku/builder for the given list of builders", long_about = None)]
+#[command(author, version, about = "Updates all references to a buildpack in heroku/cnb-builder-images for the given list of builders", long_about = None)]
 pub(crate) struct UpdateBuilderArgs {
     #[arg(long)]
     pub(crate) repository_path: PathBuf,

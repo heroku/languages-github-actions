@@ -60,7 +60,7 @@ jobs:
       changelog: ${{ steps.generate-changelog.outputs.changelog }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
 
@@ -74,7 +74,7 @@ jobs:
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2.6.2
+        uses: Swatinem/rust-cache@v2.7.0
 
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
@@ -175,7 +175,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: inputs.dry_run == false
-        uses: docker/login-action@v2.2.0
+        uses: docker/login-action@v3.0.0
         with:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
@@ -287,15 +287,15 @@ jobs:
           private_key: ${{ secrets.app_private_key }}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ./buildpacks
 
-      - name: Checkout builder repository
-        uses: actions/checkout@v3
+      - name: Checkout cnb-builder-images repository
+        uses: actions/checkout@v4
         with:
-          repository: heroku/builder
-          path: ./builder
+          repository: heroku/cnb-builder-images
+          path: ./cnb-builder-images
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.app_token }}
@@ -313,7 +313,7 @@ jobs:
         # image to exist in order to calculate a digest with `crane`. Adding the check here
         # means no files will be modified and so no PR will be created later.
         if: inputs.dry_run == false
-        run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./builder --builders builder-22,buildpacks-20
+        run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./cnb-builder-images --builders builder-20,builder-22,buildpacks-20,salesforce-functions
 
       - name: Create Pull Request
         id: pr
@@ -326,7 +326,7 @@ jobs:
             Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
 
             ${{ needs.compile.outputs.changelog }}
-          path: ./builder
+          path: ./cnb-builder-images
           branch: update/${{ github.repository }}
           delete-branch: true
           # This will ensure commits made from this workflow are attributed to the GH application user
@@ -335,6 +335,6 @@ jobs:
 
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
-        run: gh pr merge --auto --squash --repo heroku/builder "${{ steps.pr.outputs.pull-request-number }}"
+        run: gh pr merge --auto --squash --repo heroku/cnb-builder-images "${{ steps.pr.outputs.pull-request-number }}"
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
