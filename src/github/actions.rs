@@ -1,5 +1,4 @@
 use rand::distributions::{Alphanumeric, DistString};
-use std::fmt::{Display, Formatter};
 use std::fs::OpenOptions;
 use std::io;
 use std::io::{stdout, Write};
@@ -34,21 +33,10 @@ pub(crate) fn set_output<N: Into<String>, V: Into<String>>(
         .map_err(SetActionOutputError::Writing)
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum SetActionOutputError {
-    Opening(io::Error),
-    Writing(io::Error),
-}
-
-impl Display for SetActionOutputError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SetActionOutputError::Opening(error) => {
-                write!(f, "Could not open action output\nError: {error}")
-            }
-            SetActionOutputError::Writing(error) => {
-                write!(f, "Could not write action output\nError: {error}")
-            }
-        }
-    }
+    #[error("Could not open action output\nError: {0}")]
+    Opening(#[source] io::Error),
+    #[error("Could not write action output\nError: {0}")]
+    Writing(#[source] io::Error),
 }

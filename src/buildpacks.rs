@@ -1,13 +1,14 @@
 use libcnb_common::toml_file::{read_toml_file, TomlFileError};
 use libcnb_data::buildpack::BuildpackDescriptor;
 use libcnb_package::find_buildpack_dirs;
-use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum CalculateDigestError {
-    CommandFailure(String, std::io::Error),
+    #[error("Failed to execute crane digest {0}\nError: {1}")]
+    CommandFailure(String, #[source] std::io::Error),
+    #[error("Command crane digest {0} exited with a non-zero status\nStatus: {1}")]
     ExitStatus(String, ExitStatus),
 }
 
@@ -56,20 +57,9 @@ pub(crate) fn find_releasable_buildpacks(
         })
         .map_err(|e| FindReleasableBuildpacksError(starting_dir.to_path_buf(), e))
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("I/O error while finding buildpacks\nPath: {}\nError: {1}", .0.display())]
 pub(crate) struct FindReleasableBuildpacksError(PathBuf, ignore::Error);
-
-impl Display for FindReleasableBuildpacksError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let path = &self.0;
-        let error = &self.1;
-        write!(
-            f,
-            "I/O error while finding buildpacks\nPath: {}\nError: {error}",
-            path.display()
-        )
-    }
-}
 
 pub(crate) fn read_buildpack_descriptor(
     dir: &Path,
@@ -79,38 +69,9 @@ pub(crate) fn read_buildpack_descriptor(
         .map_err(|e| ReadBuildpackDescriptorError(buildpack_path, e))
 }
 
-#[derive(Debug)]
-pub(crate) struct ReadBuildpackDescriptorError(PathBuf, TomlFileError);
-
-impl Display for ReadBuildpackDescriptorError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let buildpack_path = &self.0;
-        let error = &self.1;
-        match error {
-            TomlFileError::IoError(source) => {
-                write!(
-                    f,
-                    "Failed to read buildpack\nPath: {}\nError: {source}",
-                    buildpack_path.display()
-                )
-            }
-            TomlFileError::TomlDeserializationError(source) => {
-                write!(
-                    f,
-                    "Failed to deserialize buildpack\nPath: {}\nError: {source}",
-                    buildpack_path.display()
-                )
-            }
-            TomlFileError::TomlSerializationError(source) => {
-                write!(
-                    f,
-                    "Failed to serialize buildpack\nPath: {}\nError: {source}",
-                    buildpack_path.display()
-                )
-            }
-        }
-    }
-}
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to read buildpack\nPath: {}\nError: {1}", .0.display())]
+pub(crate) struct ReadBuildpackDescriptorError(PathBuf, #[source] TomlFileError);
 
 #[cfg(test)]
 mod test {

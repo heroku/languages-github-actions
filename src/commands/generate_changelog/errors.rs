@@ -2,53 +2,20 @@ use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorEr
 use crate::changelog::ChangelogError;
 use crate::commands::ResolvePathError;
 use crate::github::actions::SetActionOutputError;
-use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
+    #[error(transparent)]
     ResolvePath(ResolvePathError),
+    #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
+    #[error(transparent)]
     ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
-    ReadingChangelog(PathBuf, std::io::Error),
-    ParsingChangelog(PathBuf, ChangelogError),
+    #[error("Could not read changelog\nPath: {}\nError: {1}", .0.display())]
+    ReadingChangelog(PathBuf, #[source] std::io::Error),
+    #[error("Could not parse changelog\nPath: {}\nError: {1}", .0.display())]
+    ParsingChangelog(PathBuf, #[source] ChangelogError),
+    #[error(transparent)]
     SetActionOutput(SetActionOutputError),
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::ResolvePath(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::FindReleasableBuildpacks(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::ReadBuildpackDescriptor(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::SetActionOutput(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::ReadingChangelog(path, error) => {
-                write!(
-                    f,
-                    "Could not read changelog\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-
-            Error::ParsingChangelog(path, error) => {
-                write!(
-                    f,
-                    "Could not parse changelog\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-        }
-    }
 }

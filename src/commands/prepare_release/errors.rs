@@ -4,133 +4,51 @@ use crate::commands::ResolvePathError;
 use crate::github::actions::SetActionOutputError;
 use libcnb_data::buildpack::BuildpackVersion;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
+    #[error(transparent)]
     ResolvePath(ResolvePathError),
+    #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
+    #[error(transparent)]
     SetActionOutput(SetActionOutputError),
-    InvalidRepositoryUrl(String, uriparse::URIError),
-    InvalidDeclarationsStartingVersion(String, semver::Error),
+    #[error("Invalid URL `{0}` for argument --repository-url\nError: {1}")]
+    InvalidRepositoryUrl(String, #[source] uriparse::URIError),
+    #[error("Invalid Version `{0}` for argument --declarations-starting-version\nError: {1}")]
+    InvalidDeclarationsStartingVersion(String, #[source] semver::Error),
+    #[error("No buildpacks found under {}", .0.display())]
     NoBuildpacksFound(PathBuf),
+    #[error("Not all versions match:\n{}", list_versions_with_path(.0))]
     NotAllVersionsMatch(HashMap<PathBuf, BuildpackVersion>),
+    #[error("No fixed version could be determined")]
     NoFixedVersion,
-    ReadingChangelog(PathBuf, io::Error),
-    ParsingChangelog(PathBuf, ChangelogError),
-    ReadingBuildpack(PathBuf, io::Error),
-    ParsingBuildpack(PathBuf, toml_edit::TomlError),
+    #[error("Could not read changelog\nPath: {}\nError: {1}", .0.display())]
+    ReadingChangelog(PathBuf, #[source] io::Error),
+    #[error("Could not parse changelog\nPath: {}\nError: {1}", .0.display())]
+    ParsingChangelog(PathBuf, #[source] ChangelogError),
+    #[error("Could not write changelog\nPath: {}\nError: {1}", .0.display())]
+    WritingChangelog(PathBuf, #[source] io::Error),
+    #[error("Missing required field `{1}` in buildpack.toml\nPath: {}", .0.display())]
     MissingRequiredField(PathBuf, String),
+    #[error("Invalid buildpack id `{1}` in buildpack.toml\nPath: {}", .0.display())]
     InvalidBuildpackId(PathBuf, String),
+    #[error("Invalid buildpack version `{1}` in buildpack.toml\nPath: {}", .0.display())]
     InvalidBuildpackVersion(PathBuf, String),
-    WritingBuildpack(PathBuf, io::Error),
-    WritingChangelog(PathBuf, io::Error),
+    #[error("Could not read buildpack\nPath: {}\nError: {1}", .0.display())]
+    ReadingBuildpack(PathBuf, #[source] io::Error),
+    #[error("Could not parse buildpack\nPath: {}\nError: {1}", .0.display())]
+    ParsingBuildpack(PathBuf, #[source] toml_edit::TomlError),
+    #[error("Could not write buildpack\nPath: {}\nError: {1}", .0.display())]
+    WritingBuildpack(PathBuf, #[source] io::Error),
 }
 
-impl Display for Error {
-    #[allow(clippy::too_many_lines)]
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::ResolvePath(error) => {
-                write!(f, "{error}")
-            }
-            Error::FindReleasableBuildpacks(error) => {
-                write!(f, "{error}")
-            }
-            Error::SetActionOutput(error) => {
-                write!(f, "{error}")
-            }
-            Error::InvalidRepositoryUrl(value, error) => {
-                write!(
-                    f,
-                    "Invalid URL `{value}` for argument --repository-url\nError: {error}"
-                )
-            }
-            Error::InvalidDeclarationsStartingVersion(value, error) => {
-                write!(f, "Invalid Version `{value}` for argument --declarations-starting-version\nError: {error}")
-            }
-            Error::NoBuildpacksFound(path) => {
-                write!(f, "No buildpacks found under {}", path.display())
-            }
-            Error::NotAllVersionsMatch(version_map) => {
-                write!(
-                    f,
-                    "Not all versions match:\n{}",
-                    version_map
-                        .iter()
-                        .map(|(path, version)| format!("• {version} ({})", path.display()))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
-            }
-            Error::NoFixedVersion => {
-                write!(f, "No fixed version could be determined")
-            }
-            Error::ReadingBuildpack(path, error) => {
-                write!(
-                    f,
-                    "Could not read buildpack\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-            Error::ParsingBuildpack(path, error) => {
-                write!(
-                    f,
-                    "Could not parse buildpack\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-            Error::WritingBuildpack(path, error) => {
-                write!(
-                    f,
-                    "Could not write buildpack\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-            Error::ReadingChangelog(path, error) => {
-                write!(
-                    f,
-                    "Could not read changelog\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-            Error::ParsingChangelog(path, error) => {
-                write!(
-                    f,
-                    "Could not parse changelog\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-            Error::WritingChangelog(path, error) => {
-                write!(
-                    f,
-                    "Could not write changelog\nPath: {}\nError: {error}",
-                    path.display()
-                )
-            }
-            Error::MissingRequiredField(path, field) => {
-                write!(
-                    f,
-                    "Missing required field `{field}` in buildpack.toml\nPath: {}",
-                    path.display()
-                )
-            }
-            Error::InvalidBuildpackId(path, id) => {
-                write!(
-                    f,
-                    "Invalid buildpack id `{id}` in buildpack.toml\nPath: {}",
-                    path.display()
-                )
-            }
-            Error::InvalidBuildpackVersion(path, version) => {
-                write!(
-                    f,
-                    "Invalid buildpack version `{version}` in buildpack.toml\nPath: {}",
-                    path.display()
-                )
-            }
-        }
-    }
+fn list_versions_with_path(version_map: &HashMap<PathBuf, BuildpackVersion>) -> String {
+    version_map
+        .iter()
+        .map(|(path, version)| format!("• {version} ({})", path.display()))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

@@ -361,6 +361,7 @@ dependencies = [
  "regex",
  "semver",
  "serde_json",
+ "thiserror",
  "toml 0.7.6",
  "toml_edit 0.19.14",
  "uriparse",

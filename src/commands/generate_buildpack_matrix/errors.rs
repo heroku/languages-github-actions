@@ -2,65 +2,30 @@ use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorEr
 use crate::commands::ResolvePathError;
 use crate::github::actions::SetActionOutputError;
 use std::collections::HashSet;
-use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
+    #[error(transparent)]
     ResolvePath(ResolvePathError),
+    #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
+    #[error(transparent)]
     ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
+    #[error("The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}", .0.display())]
     MissingDockerRepositoryMetadata(PathBuf),
-    SerializingJson(serde_json::Error),
+    #[error("Could not serialize buildpacks into json\nError: {0}")]
+    SerializingJson(#[source] serde_json::Error),
+    #[error("Expected all buildpacks to have the same version but multiple versions were found:\n{}", list_versions(.0))]
     FixedVersion(HashSet<String>),
+    #[error(transparent)]
     SetActionOutput(SetActionOutputError),
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::ResolvePath(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::FindReleasableBuildpacks(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::SetActionOutput(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::ReadBuildpackDescriptor(error) => {
-                write!(f, "{error}")
-            }
-
-            Error::SerializingJson(error) => {
-                write!(
-                    f,
-                    "Could not serialize buildpacks into json\nError: {error}"
-                )
-            }
-
-            Error::MissingDockerRepositoryMetadata(path) => {
-                write!(
-                    f,
-                    "The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}",
-                    path.display()
-                )
-            }
-
-            Error::FixedVersion(version) => {
-                write!(
-                    f,
-                    "Expected all buildpacks to have the same version but multiple versions were found:\n{}",
-                    version
-                        .iter()
-                        .map(|version| format!("• {version}"))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
-            }
-        }
-    }
+fn list_versions(versions: &HashSet<String>) -> String {
+    versions
+        .iter()
+        .map(|version| format!("• {version}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

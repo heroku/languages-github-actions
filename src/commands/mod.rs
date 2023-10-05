@@ -1,4 +1,3 @@
-use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
 
@@ -8,27 +7,15 @@ pub(crate) mod prepare_release;
 pub(crate) mod update_builder;
 
 pub(crate) fn resolve_path(value: Option<PathBuf>) -> Result<PathBuf, ResolvePathError> {
-    std::env::current_dir()
-        .map_err(ResolvePathError)
-        .map(|current_dir| {
-            if let Some(path) = value {
-                if path.is_absolute() {
-                    path
-                } else {
-                    current_dir.join(path)
-                }
-            } else {
-                current_dir
-            }
-        })
-}
-
-#[derive(Debug)]
-pub(crate) struct ResolvePathError(io::Error);
-
-impl Display for ResolvePathError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let error = &self.0;
-        write!(f, "Failed to get current directory\nError: {error}")
+    let current_dir = std::env::current_dir();
+    match value {
+        None => current_dir,
+        Some(path) if path.is_absolute() => Ok(path),
+        Some(path) => current_dir.map(|dir| dir.join(path)),
     }
+    .map_err(ResolvePathError)
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to get current directory\nError: {0}")]
+pub(crate) struct ResolvePathError(io::Error);
