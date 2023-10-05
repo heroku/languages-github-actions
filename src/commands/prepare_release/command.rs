@@ -1,7 +1,7 @@
 use crate::buildpacks::find_releasable_buildpacks;
 use crate::changelog::{generate_release_declarations, Changelog, ReleaseEntry};
 use crate::commands::prepare_release::errors::Error;
-use crate::commands::resolve_path;
+use crate::commands::resolve_working_dir_from_current_dir;
 use crate::github::actions;
 use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
@@ -48,7 +48,8 @@ struct ChangelogFile {
 }
 
 pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
-    let working_dir = resolve_path(args.working_dir).map_err(Error::ResolvePath)?;
+    let working_dir =
+        resolve_working_dir_from_current_dir(args.working_dir).map_err(Error::ResolveWorkingDir)?;
 
     let repository_url = URI::try_from(args.repository_url.as_str())
         .map(URI::into_owned)

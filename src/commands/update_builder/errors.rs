@@ -1,13 +1,12 @@
 use crate::buildpacks::{
     CalculateDigestError, FindReleasableBuildpacksError, ReadBuildpackDescriptorError,
 };
-use crate::commands::ResolvePathError;
 use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
-    #[error(transparent)]
-    ResolvePath(ResolvePathError),
+    #[error("Failed to resolve path {}\nError: {1}", .0.display())]
+    ResolvePath(PathBuf, std::io::Error),
     #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]

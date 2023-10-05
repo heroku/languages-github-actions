@@ -1,7 +1,7 @@
 use crate::buildpacks::{find_releasable_buildpacks, read_buildpack_descriptor};
 use crate::changelog::Changelog;
 use crate::commands::generate_changelog::errors::Error;
-use crate::commands::resolve_path;
+use crate::commands::resolve_working_dir_from_current_dir;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::BuildpackId;
@@ -33,7 +33,8 @@ enum ChangelogEntry {
 }
 
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
-    let working_dir = resolve_path(args.working_dir).map_err(Error::ResolvePath)?;
+    let working_dir =
+        resolve_working_dir_from_current_dir(args.working_dir).map_err(Error::ResolveWorkingDir)?;
 
     let buildpack_dirs =
         find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;

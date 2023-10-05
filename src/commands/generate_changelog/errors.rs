@@ -1,13 +1,12 @@
 use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorError};
 use crate::changelog::ChangelogError;
-use crate::commands::ResolvePathError;
 use crate::github::actions::SetActionOutputError;
 use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
-    #[error(transparent)]
-    ResolvePath(ResolvePathError),
+    #[error("Failed to resolve working directory\nError: {0}")]
+    ResolveWorkingDir(std::io::Error),
     #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]

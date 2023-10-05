@@ -2,7 +2,7 @@ use crate::buildpacks::{
     find_releasable_buildpacks, read_buildpack_descriptor, read_image_repository_metadata,
 };
 use crate::commands::generate_buildpack_matrix::errors::Error;
-use crate::commands::resolve_path;
+use crate::commands::{resolve_path, resolve_working_dir_from_current_dir};
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackId};
@@ -29,9 +29,10 @@ pub(crate) struct GenerateBuildpackMatrixArgs {
 }
 
 pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
-    let working_dir = resolve_path(args.working_dir).map_err(Error::ResolvePath)?;
+    let working_dir =
+        resolve_working_dir_from_current_dir(args.working_dir).map_err(Error::ResolveWorkingDir)?;
 
-    let package_dir = resolve_path(Some(args.package_dir)).map_err(Error::ResolvePath)?;
+    let package_dir = resolve_path(&args.package_dir, &working_dir);
 
     let cargo_profile = if args.release.unwrap_or(true) {
         CargoProfile::Release
