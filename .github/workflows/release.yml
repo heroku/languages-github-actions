@@ -1,8 +1,5 @@
 name: Release Actions
 
-env:
-  CARGO_TERM_COLOR: always
-
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +12,16 @@ on:
           - major
           - minor
           - patch
+
+defaults:
+  run:
+    # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
+    # ratherthan only error on exit (improving failure UX when pipes are used). See:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   prepare:
@@ -52,9 +59,9 @@ jobs:
 
       - name: Get previous release version
         id: previous-version
+        run: echo "value=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
-        run: echo "value=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')" >> $GITHUB_OUTPUT
 
       - name: Bump version
         run: |
@@ -67,8 +74,8 @@ jobs:
       - name: Get release metadata
         id: metadata
         run: |
-          echo "name=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
-          echo "version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[-1].version')" >> $GITHUB_OUTPUT
+          echo "name=$(cargo metadata --format-version=1 --no-deps | jq --exit-status -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
+          echo "version=$(cargo metadata --format-version=1 --no-deps | jq --exit-status -r '.packages[-1].version')" >> $GITHUB_OUTPUT
 
       - name: Package binary
         id: package-binary

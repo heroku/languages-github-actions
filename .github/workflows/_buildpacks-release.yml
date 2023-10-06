@@ -1,8 +1,5 @@
 name: _buildpacks-release
 
-env:
-  CARGO_TERM_COLOR: always
-
 on:
   workflow_call:
     inputs:
@@ -48,6 +45,16 @@ on:
       docker_hub_token:
         required: true
         description: The token to login to Docker Hub with
+
+defaults:
+  run:
+    # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
+    # ratherthan only error on exit (improving failure UX when pipes are used). See:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   compile:
@@ -112,9 +119,9 @@ jobs:
           bash_buildpack_output_dirs=()
 
           # copy any bash-based buildpack to target buildpack dir because `cargo libcnb package` will ignore them
-          for buildpack in $(jq -c '.[]' <<< "${buildpacks}"); do
-            buildpack_dir=$(jq -r '.buildpack_dir' <<< "${buildpack}")
-            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+          for buildpack in $(jq --exit-status -c '.[]' <<< "${buildpacks}"); do
+            buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
+            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
             if [ ! -d "${output_dir}" ]; then
               echo "bash-based buildpack detected at ${buildpack_dir}"
               cp -R "${buildpack_dir}" "${output_dir}"
@@ -124,8 +131,8 @@ jobs:
           done
 
           # replace dependencies that reference a bash-buildpack
-          for buildpack in $(jq -c '.[]' <<< "${buildpacks}"); do
-            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+          for buildpack in $(jq --exit-status -c '.[]' <<< "${buildpacks}"); do
+            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
             echo "checking dependencies in ${output_dir}/package.toml"
             for dep in $(yq -oy '.dependencies[].uri' "${output_dir}/package.toml"); do
               if realpath "${dep}" &> /dev/null; then
@@ -209,9 +216,9 @@ jobs:
 
       - name: Generate CNB files
         run: |
-          for buildpack in $(jq -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
-            artifact_prefix=$(jq -r '.buildpack_artifact_prefix' <<< "${buildpack}")
-            output_dir=$(jq -r '.buildpack_output_dir' <<< "${buildpack}")
+          for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+            artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
+            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
             pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
           done
 
