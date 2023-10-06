@@ -145,7 +145,7 @@ mod test {
 
         assert_eq!(
             generate_changelog(&values),
-            r#"## a
+            r"## a
 
 - change a.1
 - change a.2
@@ -158,7 +158,7 @@ mod test {
 
 - No changes.
 
-"#
+"
         );
     }
 }

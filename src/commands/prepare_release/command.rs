@@ -779,7 +779,7 @@ optional = true
     ) {
         let changelog = Changelog {
             unreleased: Some(
-                r#"
+                r"
 - Entry not under a header
 
 ### Added
@@ -794,7 +794,7 @@ optional = true
 ### Removed
 
 - Dropped all deprecated methods
-                "#
+                "
                 .trim()
                 .to_string(),
             ),
@@ -818,7 +818,7 @@ optional = true
         assert_eq!(changelog.unreleased, None);
         assert_eq!(
             changelog.releases.get("0.8.17").unwrap().body,
-            r#"
+            r"
 - Entry not under a header
 
 ### Added
@@ -835,7 +835,7 @@ optional = true
 ### Removed
 
 - Dropped all deprecated methods
-            "#
+            "
             .trim()
             .to_string()
         );
