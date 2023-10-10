@@ -78,7 +78,7 @@ jobs:
       - name: Install musl-tools
         run: sudo apt-get install musl-tools --no-install-recommends
 
-      - name: Install aarch64 musl-tools
+      - name: Install aarch64 tooling
         if: contains(inputs.targets, 'aarch64-unknown-linux-musl')
         run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
 
