@@ -36,7 +36,7 @@ on:
         description: Target Architectures to build
         type: string
         required: false
-        default: 'x86_64-unknown-linux-gnu'
+        default: 'x86_64-unknown-linux-musl'
     secrets:
       app_private_key:
         description: Private key of GitHub application (e.g. the Linguist App)
@@ -76,23 +76,22 @@ jobs:
           submodules: true
 
       - name: Install musl-tools
-        if: inputs.target == 'x86_64-unknown-linux-gnu'
         run: sudo apt-get install musl-tools --no-install-recommends
 
       - name: Install aarch64 musl-tools
-        if: inputs.target == 'aarch64-unknown-linux-gnu'
+        if: inputs.target == 'aarch64-unknown-linux-musl'
         run: sudo apt-get install g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
 
       - name: Update Rust toolchain
         run: rustup update
 
       - name: Install Rust linux-musl target
-        if: inputs.target == 'x86_64-unknown-linux-gnu'
+        if: inputs.target == 'x86_64-unknown-linux-musl'
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Install Rust aarch64-musl target
-        if: inputs.target == 'aarch64-unknown-linux-gnu'
-        run: rustup target add aarch64-unknown-linux-gnu
+        if: inputs.target == 'aarch64-unknown-linux-musl'
+        run: rustup target add aarch64-unknown-linux-musl
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.0
