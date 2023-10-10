@@ -34,9 +34,9 @@ enum ChangelogEntry {
 
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
     let working_dir = std::env::current_dir()
-        .map(|base| match args.working_dir {
-            Some(path) => resolve_path(&path, &base),
-            None => base,
+        .map(|base| {
+            args.working_dir
+                .map_or(base.clone(), |path| resolve_path(&path, &base))
         })
         .map_err(Error::ResolveWorkingDir)?;
 
