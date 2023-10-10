@@ -336,11 +336,11 @@ fn promote_changelog_unreleased_to_version(
     let changes_with_dependencies = (&changelog.unreleased, &updated_dependencies_text);
 
     let body = if let (Some(changes), Some(dependencies)) = changes_with_dependencies {
-        format!("{}\n{}", changes.trim_end(), dependencies)
+        merge_existing_changelog_entries_with_dependency_changes(changes, dependencies)
     } else if let (Some(changes), None) = changes_with_dependencies {
         changes.clone()
     } else if let (None, Some(dependencies)) = changes_with_dependencies {
-        dependencies.clone()
+        format!("### Changed\n\n{dependencies}")
     } else {
         "- No changes.".to_string()
     };
@@ -364,6 +364,31 @@ fn promote_changelog_unreleased_to_version(
     Changelog {
         unreleased: None,
         releases,
+    }
+}
+
+fn merge_existing_changelog_entries_with_dependency_changes(
+    changelog_entries: &str,
+    updated_dependencies: &str,
+) -> String {
+    if changelog_entries.contains("### Changed") {
+        changelog_entries
+            .split("### ")
+            .map(|entry| {
+                if entry.starts_with("Changed") {
+                    format!("{}\n{}\n\n", entry.trim_end(), updated_dependencies)
+                } else {
+                    entry.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("### ")
+    } else {
+        format!(
+            "{}\n\n### Changed\n\n{}",
+            changelog_entries.trim_end(),
+            updated_dependencies
+        )
     }
 }
 
@@ -651,18 +676,19 @@ optional = true
         let release_entry_0_8_16 = ReleaseEntry {
             version: "0.8.16".parse::<Version>().unwrap(),
             date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
-            body: "- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.\n- Added node version 18.14.0, 19.6.0.".to_string()
+            body: "### Added\n\n- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.\n- Added node version 18.14.0, 19.6.0.".to_string()
         };
 
         let release_entry_0_8_15 = ReleaseEntry {
             version: "0.8.15".parse::<Version>().unwrap(),
             date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
-            body: "- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))\n- Added node version 19.5.0.".to_string()
+            body: "### Changed\n\n- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))\n\n### Added\n\n- Added node version 19.5.0.".to_string()
         };
 
         let changelog = Changelog {
             unreleased: Some(
-                "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2".to_string(),
+                "### Added\n\n- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2"
+                    .to_string(),
             ),
             releases: IndexMap::from([
                 ("0.8.16".to_string(), release_entry_0_8_16.clone()),
@@ -672,7 +698,10 @@ optional = true
 
         assert_eq!(
             changelog.unreleased,
-            Some("- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2".to_string())
+            Some(
+                "### Added\n\n- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2"
+                    .to_string()
+            )
         );
         assert_eq!(changelog.releases.get("0.8.17"), None);
         assert_eq!(
@@ -704,7 +733,7 @@ optional = true
             Some(&ReleaseEntry {
                 version: "0.8.17".parse::<Version>().unwrap(),
                 date,
-                body: "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2\n- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`.".to_string()
+                body: "### Added\n\n- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2\n\n### Changed\n\n- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`.".to_string()
             })
         );
         assert_eq!(
@@ -747,8 +776,76 @@ optional = true
             Some(&ReleaseEntry {
                 version: "0.8.17".parse::<Version>().unwrap(),
                 date,
-                body: "- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`.".to_string()
+                body: "### Changed\n\n- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`."
+                    .to_string()
             })
+        );
+    }
+
+    #[test]
+    fn test_promote_changelog_unreleased_to_version_with_changed_entries_is_merged_with_updated_dependencies(
+    ) {
+        let changelog = Changelog {
+            unreleased: Some(
+                r"
+- Entry not under a header
+
+### Added
+
+- Added node version 18.15.0.
+- Added yarn version 4.0.0-rc.2
+
+### Changed
+
+- Lowed limits
+
+### Removed
+
+- Dropped all deprecated methods
+                "
+                .trim()
+                .to_string(),
+            ),
+            releases: IndexMap::new(),
+        };
+
+        let next_version = BuildpackVersion {
+            major: 0,
+            minor: 8,
+            patch: 17,
+        };
+        let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
+        let updated_dependencies = HashSet::from([buildpack_id!("b"), buildpack_id!("a")]);
+        let changelog = promote_changelog_unreleased_to_version(
+            &changelog,
+            &next_version,
+            &date,
+            &updated_dependencies,
+        );
+
+        assert_eq!(changelog.unreleased, None);
+        assert_eq!(
+            changelog.releases.get("0.8.17").unwrap().body,
+            r"
+- Entry not under a header
+
+### Added
+
+- Added node version 18.15.0.
+- Added yarn version 4.0.0-rc.2
+
+### Changed
+
+- Lowed limits
+- Updated `a` to `0.8.17`.
+- Updated `b` to `0.8.17`.
+
+### Removed
+
+- Dropped all deprecated methods
+            "
+            .trim()
+            .to_string()
         );
     }
 
