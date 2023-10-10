@@ -32,6 +32,11 @@ on:
         type: string
         required: false
         default: main
+      target:
+        description: Target Architectures to build
+        type: string
+        required: false
+        default: "x86_64-unknown-linux-gnu"
     secrets:
       app_private_key:
         description: Private key of GitHub application (e.g. the Linguist App)
@@ -71,13 +76,23 @@ jobs:
           submodules: true
 
       - name: Install musl-tools
+        if: inputs.target == "x86_64-unknown-linux-gnu"
         run: sudo apt-get install musl-tools --no-install-recommends
+
+      - name: Install aarch64 musl-tools
+        if: inputs.target == "aarch64-unknown-linux-gnu"
+        run: sudo apt-get install g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
 
       - name: Update Rust toolchain
         run: rustup update
 
       - name: Install Rust linux-musl target
+        if: inputs.target == "x86_64-unknown-linux-gnu"
         run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Install Rust aarch64-musl target
+        if: inputs.target == "aarch64-unknown-linux-gnu"
+        run: rustup target add aarch64-unknown-linux-gnu
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.0
@@ -101,7 +116,7 @@ jobs:
 
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release
+        run: cargo libcnb package --release --target ${{ inputs.target }}
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
@@ -217,7 +232,7 @@ jobs:
       - name: Generate CNB files
         run: |
           for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
-            artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
+            artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-${{ inputs.target }}
             output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
             pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
           done
