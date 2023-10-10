@@ -64,7 +64,7 @@ env:
 jobs:
   compile:
     name: Compile Buildpacks
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     outputs:
       buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
       version: ${{ steps.generate-buildpack-matrix.outputs.version }}
