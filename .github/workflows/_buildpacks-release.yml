@@ -80,7 +80,7 @@ jobs:
 
       - name: Install aarch64 musl-tools
         if: inputs.target == 'aarch64-unknown-linux-musl'
-        run: sudo apt-get install g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
+        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
 
       - name: Update Rust toolchain
         run: rustup update
@@ -115,7 +115,15 @@ jobs:
 
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release --target ${{ inputs.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+        run: |
+          if [ "${{ inputs.target }}" == "aarch64-unknown-linux-musl" ]; then
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+            CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+          fi
+          cargo libcnb package --release --target ${{ inputs.target }}
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
