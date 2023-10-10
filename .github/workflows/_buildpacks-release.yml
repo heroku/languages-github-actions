@@ -119,7 +119,7 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
           CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
         run: |
-          for $target in ${{ inputs.target }}; do
+          for target in ${{ inputs.target }}; do
             if [ $target == "aarch64-unknown-linux-musl" ]; then
               CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
               CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
@@ -198,7 +198,7 @@ jobs:
 
       - name: Generate CNB files
         run: |
-          for $target in ${{ inputs.targets }}; do
+          for target in ${{ inputs.targets }}; do
             for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
               artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-$target
               output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
