@@ -32,7 +32,7 @@ on:
         type: string
         required: false
         default: main
-      target:
+      targets:
         description: Target Architectures to build
         type: string
         required: false
@@ -79,18 +79,18 @@ jobs:
         run: sudo apt-get install musl-tools --no-install-recommends
 
       - name: Install aarch64 musl-tools
-        if: inputs.target == 'aarch64-unknown-linux-musl'
+        if: contains(inputs.targets, 'aarch64-unknown-linux-musl')
         run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
 
       - name: Update Rust toolchain
         run: rustup update
 
       - name: Install Rust linux-musl target
-        if: inputs.target == 'x86_64-unknown-linux-musl'
+        if: contains(inputs.targets, 'x86_64-unknown-linux-musl')
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Install Rust aarch64-musl target
-        if: inputs.target == 'aarch64-unknown-linux-musl'
+        if: contains(inputs.targets, 'aarch64-unknown-linux-musl')
         run: rustup target add aarch64-unknown-linux-musl
 
       - name: Rust cache
@@ -119,11 +119,13 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
           CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
         run: |
-          if [ "${{ inputs.target }}" == "aarch64-unknown-linux-musl" ]; then
-            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
-            CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
-          fi
-          cargo libcnb package --release --target ${{ inputs.target }}
+          for $target in ${{ inputs.target }}; do
+            if [ $target == "aarch64-unknown-linux-musl" ]; then
+              CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+              CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+            fi
+            cargo libcnb package --release --target $target
+          done
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
@@ -196,10 +198,12 @@ jobs:
 
       - name: Generate CNB files
         run: |
-          for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
-            artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-${{ inputs.target }}
-            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
-            pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+          for $target in ${{ inputs.targets }}; do
+            for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+              artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-$target
+              output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+              pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+            done
           done
 
       - name: Get token for GitHub application (Linguist)
