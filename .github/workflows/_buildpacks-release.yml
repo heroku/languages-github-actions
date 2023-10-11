@@ -113,6 +113,9 @@ jobs:
           branch: ${{ inputs.languages_cli_branch }}
           update_rust_toolchain: false
 
+      - name: Install Tree For Debugging
+        run: sudo apt-get install tree --no-install-recommends
+
       - name: Package buildpacks
         id: libcnb-package
         env:
@@ -126,6 +129,7 @@ jobs:
             fi
             cargo libcnb package --release --target $target
           done
+          tree
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
