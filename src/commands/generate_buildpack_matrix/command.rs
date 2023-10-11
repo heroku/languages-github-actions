@@ -22,8 +22,6 @@ pub(crate) struct GenerateBuildpackMatrixArgs {
     pub(crate) working_dir: Option<PathBuf>,
     #[arg(long)]
     pub(crate) package_dir: PathBuf,
-    #[arg(long)]
-    pub(crate) release: Option<bool>,
     #[arg(long, default_value = "x86_64-unknown-linux-musl")]
     pub(crate) target: String,
 }
@@ -38,14 +36,8 @@ pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
 
     let package_dir = resolve_path(&args.package_dir, &working_dir);
 
-    let cargo_profile = if args.release.unwrap_or(true) {
-        CargoProfile::Release
-    } else {
-        CargoProfile::Dev
-    };
-
     let packaged_buildpack_dir_resolver =
-        create_packaged_buildpack_dir_resolver(&package_dir, cargo_profile, &args.target);
+        create_packaged_buildpack_dir_resolver(&package_dir, CargoProfile::Release, &args.target);
 
     let buildpack_dirs =
         find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;
