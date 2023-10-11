@@ -1,7 +1,6 @@
 use crate::buildpacks::{find_releasable_buildpacks, read_buildpack_descriptor};
 use crate::changelog::Changelog;
 use crate::commands::generate_changelog::errors::Error;
-use crate::commands::resolve_path;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::BuildpackId;
@@ -13,8 +12,6 @@ type Result<T> = std::result::Result<T, Error>;
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Generates a changelog from one or more buildpacks in a project", long_about = None, disable_version_flag = true)]
 pub(crate) struct GenerateChangelogArgs {
-    #[arg(long)]
-    pub(crate) working_dir: Option<PathBuf>,
     #[arg(long, group = "section")]
     pub(crate) unreleased: bool,
     #[arg(long, group = "section")]
@@ -33,15 +30,9 @@ enum ChangelogEntry {
 }
 
 pub(crate) fn execute(args: GenerateChangelogArgs) -> Result<()> {
-    let working_dir = std::env::current_dir()
-        .map(|base| {
-            args.working_dir
-                .map_or(base.clone(), |path| resolve_path(&path, &base))
-        })
-        .map_err(Error::ResolveWorkingDir)?;
-
+    let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
     let buildpack_dirs =
-        find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;
+        find_releasable_buildpacks(&current_dir).map_err(Error::FindReleasableBuildpacks)?;
 
     let changelog_entry_type = match args.version {
         Some(version) => ChangelogEntryType::Version(version),

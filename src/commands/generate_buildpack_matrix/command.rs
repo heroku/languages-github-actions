@@ -19,28 +19,20 @@ type Result<T> = std::result::Result<T, Error>;
 #[command(author, version, about = "Generates a JSON list of buildpack information for each buildpack detected", long_about = None)]
 pub(crate) struct GenerateBuildpackMatrixArgs {
     #[arg(long)]
-    pub(crate) working_dir: Option<PathBuf>,
-    #[arg(long)]
     pub(crate) package_dir: PathBuf,
     #[arg(long, default_value = "x86_64-unknown-linux-musl")]
     pub(crate) target: String,
 }
 
 pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
-    let working_dir = std::env::current_dir()
-        .map(|base| {
-            args.working_dir
-                .map_or(base.clone(), |path| resolve_path(&path, &base))
-        })
-        .map_err(Error::ResolveWorkingDir)?;
-
-    let package_dir = resolve_path(&args.package_dir, &working_dir);
+    let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
+    let package_dir = resolve_path(&args.package_dir, &current_dir);
 
     let packaged_buildpack_dir_resolver =
         create_packaged_buildpack_dir_resolver(&package_dir, CargoProfile::Release, &args.target);
 
     let buildpack_dirs =
-        find_releasable_buildpacks(&working_dir).map_err(Error::FindReleasableBuildpacks)?;
+        find_releasable_buildpacks(&current_dir).map_err(Error::FindReleasableBuildpacks)?;
 
     let buildpacks = buildpack_dirs
         .iter()

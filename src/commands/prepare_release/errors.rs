@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
-    #[error("Failed to resolve working directory\nError: {0}")]
-    ResolveWorkingDir(io::Error),
+    #[error("Failed to get current directory\nError: {0}")]
+    GetCurrentDir(io::Error),
     #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]
