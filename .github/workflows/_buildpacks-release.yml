@@ -32,6 +32,11 @@ on:
         type: string
         required: false
         default: main
+      libcnb_cargo_version:
+        description: Override the version of libcnb cargo version
+        type: string
+        required: false
+        default: "lockfile"
       targets:
         description: Target Architectures to build
         type: string
@@ -100,11 +105,15 @@ jobs:
       # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
         run: |
-          LOCKFILE_URL="https://raw.githubusercontent.com/heroku/languages-github-actions/${{ inputs.languages_cli_branch }}/Cargo.lock"
-          LIBCNB_PACKAGE_VERSION=$( \
-            curl --silent --show-error --fail --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 "${LOCKFILE_URL}" \
-            | yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' \
-          )
+          if [ "${{ inputs.libcncb_cargo_version }}" == "default" ]; then
+            LOCKFILE_URL="https://raw.githubusercontent.com/heroku/languages-github-actions/${{ inputs.languages_cli_branch }}/Cargo.lock"
+            LIBCNB_PACKAGE_VERSION=$( \
+              curl --silent --show-error --fail --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 "${LOCKFILE_URL}" \
+              | yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' \
+            )
+          else
+            LIBCNB_PACKAGE_VERSION=${{ inputs.libcnb_cargo_version }}
+          fi
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
       - name: Install Languages CLI
