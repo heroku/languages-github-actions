@@ -24,7 +24,7 @@ pub(crate) struct GenerateBuildpackMatrixArgs {
     pub(crate) target: String,
 }
 
-pub(crate) fn execute(args: GenerateBuildpackMatrixArgs) -> Result<()> {
+pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
     let package_dir = resolve_path(&args.package_dir, &current_dir);
 

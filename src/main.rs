@@ -29,7 +29,7 @@ pub(crate) enum Cli {
 fn main() {
     match Cli::parse() {
         Cli::GenerateBuildpackMatrix(args) => {
-            if let Err(error) = generate_buildpack_matrix::execute(args) {
+            if let Err(error) = generate_buildpack_matrix::execute(&args) {
                 eprintln!("❌ {error}");
                 std::process::exit(UNSPECIFIED_ERROR);
             }
