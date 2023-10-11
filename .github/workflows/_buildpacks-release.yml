@@ -160,12 +160,12 @@ jobs:
             buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
             output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
             echo "Output Dir: $output_dir"
-            #if [ ! -d "${output_dir}" ]; then
-            #  echo "bash-based buildpack detected at ${buildpack_dir}"
-            #  cp -R "${buildpack_dir}" "${output_dir}"
-            #  bash_buildpack_source_dirs+=("${buildpack_dir}")
-            #  bash_buildpack_output_dirs+=("${output_dir}")
-            #fi
+            if [ ! -d "${output_dir}" ]; then
+              echo "bash-based buildpack detected at ${buildpack_dir}"
+              cp -R "${buildpack_dir}" "${output_dir}"
+              bash_buildpack_source_dirs+=("${buildpack_dir}")
+              bash_buildpack_output_dirs+=("${output_dir}")
+            fi
           done
 
           # replace dependencies that reference a bash-buildpack
