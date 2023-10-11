@@ -191,7 +191,7 @@ jobs:
         uses: actions/cache/save@v3
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: packaged/
 
   publish-github:
     name: Publish → GitHub Release
