@@ -218,10 +218,8 @@ jobs:
           for target in ${{ inputs.targets }}; do
             for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
               artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-$target
-              output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
-              echo "${buildpack}"
-              echo "$output_dir"
-              tree $output_dir
+              #output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+              output_dir="packaged/$target/release/$artifact_prefix"
               pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
             done
           done
