@@ -122,7 +122,7 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
           CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
         run: |
-          for target in ${{ inputs.target }}; do
+          for target in ${{ inputs.targets }}; do
             if [ $target == "aarch64-unknown-linux-musl" ]; then
               CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
               CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
