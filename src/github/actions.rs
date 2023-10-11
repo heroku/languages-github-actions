@@ -6,7 +6,7 @@ use std::io::{stdout, Write};
 pub(crate) fn set_output<N: Into<String>, V: Into<String>>(
     name: N,
     value: V,
-) -> Result<(), SetOutputError> {
+) -> Result<(), SetActionOutputError> {
     let name = name.into();
     let value = value.into();
 
@@ -23,18 +23,20 @@ pub(crate) fn set_output<N: Into<String>, V: Into<String>>(
             let append_file = OpenOptions::new()
                 .append(true)
                 .open(github_output)
-                .map_err(SetOutputError::Opening)?;
+                .map_err(SetActionOutputError::Opening)?;
             Box::new(append_file)
         }
         Err(_) => Box::new(stdout()),
     };
 
     file.write_all(line.as_bytes())
-        .map_err(SetOutputError::Writing)
+        .map_err(SetActionOutputError::Writing)
 }
 
-#[derive(Debug)]
-pub(crate) enum SetOutputError {
-    Opening(io::Error),
-    Writing(io::Error),
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SetActionOutputError {
+    #[error("Could not open action output\nError: {0}")]
+    Opening(#[source] io::Error),
+    #[error("Could not write action output\nError: {0}")]
+    Writing(#[source] io::Error),
 }

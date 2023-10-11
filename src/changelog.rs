@@ -174,47 +174,24 @@ pub(crate) struct ReleaseEntry {
     pub(crate) body: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum ChangelogError {
+    #[error("No root node in changelog markdown")]
     NoRootNode,
+    #[error("Could not parse changelog - {0}")]
     Parse(String),
-    ParseVersion(semver::Error),
-    ParseReleaseEntryYear(ParseIntError),
-    ParseReleaseEntryMonth(ParseIntError),
-    ParseReleaseEntryDay(ParseIntError),
+    #[error("Invalid semver version in release entry - {0}")]
+    ParseVersion(#[source] semver::Error),
+    #[error("Invalid year in release entry - {0}")]
+    ParseReleaseEntryYear(#[source] ParseIntError),
+    #[error("Invalid month in release entry - {0}")]
+    ParseReleaseEntryMonth(#[source] ParseIntError),
+    #[error("Invalid day in release entry - {0}")]
+    ParseReleaseEntryDay(#[source] ParseIntError),
+    #[error("Invalid date in release entry - {0}")]
     InvalidReleaseDate(String),
+    #[error("Ambiguous date in release entry")]
     AmbiguousReleaseDate,
-}
-
-impl Display for ChangelogError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChangelogError::NoRootNode => {
-                write!(f, "No root node in changelog markdown")
-            }
-            ChangelogError::Parse(error) => {
-                write!(f, "Could not parse changelog - {error}")
-            }
-            ChangelogError::ParseVersion(error) => {
-                write!(f, "Invalid semver version in release entry - {error}")
-            }
-            ChangelogError::ParseReleaseEntryYear(error) => {
-                write!(f, "Invalid year in release entry - {error}")
-            }
-            ChangelogError::ParseReleaseEntryMonth(error) => {
-                write!(f, "Invalid month in release entry - {error}")
-            }
-            ChangelogError::ParseReleaseEntryDay(error) => {
-                write!(f, "Invalid day in release entry - {error}")
-            }
-            ChangelogError::InvalidReleaseDate(error) => {
-                write!(f, "Invalid date in release entry - {error}")
-            }
-            ChangelogError::AmbiguousReleaseDate => {
-                write!(f, "Ambiguous date in release entry")
-            }
-        }
-    }
 }
 
 pub(crate) fn generate_release_declarations<S: Into<String>>(

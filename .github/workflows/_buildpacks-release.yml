@@ -55,6 +55,7 @@ defaults:
 
 env:
   CARGO_TERM_COLOR: always
+  PACKAGE_DIR: ./packaged
 
 jobs:
   compile:
@@ -101,11 +102,11 @@ jobs:
 
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release
+        run: cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix
+        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Generate changelog
         id: generate-changelog
@@ -153,7 +154,7 @@ jobs:
         uses: actions/cache/save@v3
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: ${{ env.PACKAGE_DIR }}
 
   publish-docker:
     name: Publish → Docker - ${{ matrix.buildpack_id }}
@@ -169,7 +170,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: ${{ env.PACKAGE_DIR }}
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
@@ -207,7 +208,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: ${{ env.PACKAGE_DIR }}
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 

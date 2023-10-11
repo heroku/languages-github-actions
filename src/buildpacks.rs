@@ -1,11 +1,14 @@
+use libcnb_common::toml_file::{read_toml_file, TomlFileError};
 use libcnb_data::buildpack::BuildpackDescriptor;
-use libcnb_package::{find_buildpack_dirs, GenericMetadata};
+use libcnb_package::find_buildpack_dirs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum CalculateDigestError {
-    CommandFailure(String, std::io::Error),
+    #[error("Failed to execute crane digest {0}\nError: {1}")]
+    CommandFailure(String, #[source] std::io::Error),
+    #[error("Command crane digest {0} exited with a non-zero status\nStatus: {1}")]
     ExitStatus(String, ExitStatus),
 }
 
@@ -26,11 +29,11 @@ pub(crate) fn calculate_digest(digest_url: &String) -> Result<String, CalculateD
 }
 
 pub(crate) fn read_image_repository_metadata(
-    buildpack_descriptor: &BuildpackDescriptor<GenericMetadata>,
+    buildpack_descriptor: &BuildpackDescriptor,
 ) -> Option<String> {
     let metadata = match buildpack_descriptor {
-        BuildpackDescriptor::Single(descriptor) => &descriptor.metadata,
-        BuildpackDescriptor::Meta(descriptor) => &descriptor.metadata,
+        BuildpackDescriptor::Component(descriptor) => &descriptor.metadata,
+        BuildpackDescriptor::Composite(descriptor) => &descriptor.metadata,
     };
 
     #[allow(clippy::redundant_closure_for_method_calls)]
@@ -42,20 +45,38 @@ pub(crate) fn read_image_repository_metadata(
         .map(|value| value.to_string())
 }
 
-pub(crate) fn find_releasable_buildpacks(starting_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
-    find_buildpack_dirs(starting_dir, &[starting_dir.join("target")]).map(|results| {
-        results
-            .into_iter()
-            .filter(|dir| dir.join("CHANGELOG.md").exists())
-            .collect()
-    })
+pub(crate) fn find_releasable_buildpacks(
+    starting_dir: &Path,
+) -> Result<Vec<PathBuf>, FindReleasableBuildpacksError> {
+    find_buildpack_dirs(starting_dir)
+        .map(|results| {
+            results
+                .into_iter()
+                .filter(|dir| dir.join("CHANGELOG.md").exists())
+                .collect()
+        })
+        .map_err(|e| FindReleasableBuildpacksError(starting_dir.to_path_buf(), e))
 }
+#[derive(Debug, thiserror::Error)]
+#[error("I/O error while finding buildpacks\nPath: {}\nError: {1}", .0.display())]
+pub(crate) struct FindReleasableBuildpacksError(PathBuf, ignore::Error);
+
+pub(crate) fn read_buildpack_descriptor(
+    dir: &Path,
+) -> Result<BuildpackDescriptor, ReadBuildpackDescriptorError> {
+    let buildpack_path = dir.join("buildpack.toml");
+    read_toml_file::<BuildpackDescriptor>(&buildpack_path)
+        .map_err(|e| ReadBuildpackDescriptorError(buildpack_path, e))
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to read buildpack descriptor\nPath: {}\nError: {1}", .0.display())]
+pub(crate) struct ReadBuildpackDescriptorError(PathBuf, #[source] TomlFileError);
 
 #[cfg(test)]
 mod test {
     use crate::buildpacks::read_image_repository_metadata;
     use libcnb_data::buildpack::BuildpackDescriptor;
-    use libcnb_package::GenericMetadata;
 
     #[test]
     fn test_read_image_repository_metadata() {
@@ -73,8 +94,7 @@ id = "*"
 repository = "repository value"
 "#;
 
-        let buildpack_descriptor =
-            toml::from_str::<BuildpackDescriptor<GenericMetadata>>(data).unwrap();
+        let buildpack_descriptor = toml::from_str::<BuildpackDescriptor>(data).unwrap();
         assert_eq!(
             read_image_repository_metadata(&buildpack_descriptor),
             Some("repository value".to_string())
@@ -94,8 +114,7 @@ version = "0.0.1"
 id = "*"
 "#;
 
-        let buildpack_descriptor =
-            toml::from_str::<BuildpackDescriptor<GenericMetadata>>(data).unwrap();
+        let buildpack_descriptor = toml::from_str::<BuildpackDescriptor>(data).unwrap();
         assert_eq!(read_image_repository_metadata(&buildpack_descriptor), None);
     }
 }

@@ -48,7 +48,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
 
     let repository_url = URI::try_from(args.repository_url.as_str())
-        .map(uriparse::URI::into_owned)
+        .map(URI::into_owned)
         .map_err(|e| Error::InvalidRepositoryUrl(args.repository_url.clone(), e))?;
 
     let declarations_starting_version = args
@@ -60,8 +60,8 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
         })
         .transpose()?;
 
-    let buildpack_dirs = find_releasable_buildpacks(&current_dir)
-        .map_err(|e| Error::FindingBuildpacks(current_dir.clone(), e))?;
+    let buildpack_dirs =
+        find_releasable_buildpacks(&current_dir).map_err(Error::FindReleasableBuildpacks)?;
 
     if buildpack_dirs.is_empty() {
         Err(Error::NoBuildpacksFound(current_dir))?;
