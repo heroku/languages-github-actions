@@ -203,7 +203,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
-          path: target/buildpack
+          path: packaged
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
