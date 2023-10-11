@@ -215,6 +215,7 @@ jobs:
 
       - name: Generate CNB files
         run: |
+          tree
           for target in ${{ inputs.targets }}; do
             for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
               artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-$target
