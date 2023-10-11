@@ -70,7 +70,7 @@ pub(crate) fn read_buildpack_descriptor(
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Failed to read buildpack\nPath: {}\nError: {1}", .0.display())]
+#[error("Failed to read buildpack descriptor\nPath: {}\nError: {1}", .0.display())]
 pub(crate) struct ReadBuildpackDescriptorError(PathBuf, #[source] TomlFileError);
 
 #[cfg(test)]
