@@ -197,12 +197,16 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.4.0
 
+      - name: Install Tree For Debugging
+        run: sudo apt-get install tree --no-install-recommends
+
       - name: Generate CNB files
         run: |
           for target in ${{ inputs.targets }}; do
             for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
               artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")-$target
               output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+              tree $output_dir
               pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
             done
           done
