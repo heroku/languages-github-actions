@@ -74,7 +74,7 @@ pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
             let buildpack_version = &buildpack_descriptor.buildpack().version;
 
             let docker_repository = read_image_repository_metadata(buildpack_descriptor).ok_or(
-                Error::MissingDockerRepositoryMetadata(buildpack_path.clone()),
+                Error::MissingImageRepositoryMetadata(buildpack_path.clone()),
             )?;
 
             let buildpack_uri =

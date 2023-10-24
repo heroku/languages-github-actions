@@ -105,7 +105,7 @@ pub(crate) fn extract_buildpack_info(
         (
             "docker_repository".to_string(),
             read_image_repository_metadata(buildpack_descriptor).ok_or(
-                Error::MissingDockerRepositoryMetadata(buildpack_dir.join("buildpack.toml")),
+                Error::MissingImageRepositoryMetadata(buildpack_dir.join("buildpack.toml")),
             )?,
         ),
     ]))

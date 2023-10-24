@@ -41,7 +41,7 @@ pub(crate) fn read_image_repository_metadata(
         .as_ref()
         .and_then(|metadata| metadata.get("release").and_then(|value| value.as_table()))
         .and_then(|release| release.get("image").and_then(|value| value.as_table()))
-        .and_then(|docker| docker.get("repository").and_then(|value| value.as_str()))
+        .and_then(|image| image.get("repository").and_then(|value| value.as_str()))
         .map(|value| value.to_string())
 }
 

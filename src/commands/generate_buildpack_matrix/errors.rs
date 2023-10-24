@@ -11,8 +11,8 @@ pub(crate) enum Error {
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]
     ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
-    #[error("The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}", .0.display())]
-    MissingDockerRepositoryMetadata(PathBuf),
+    #[error("The following buildpack is missing the metadata.release.image.repository entry\nPath: {}", .0.display())]
+    MissingImageRepositoryMetadata(PathBuf),
     #[error("Could not serialize buildpacks into json\nError: {0}")]
     SerializingJson(#[source] serde_json::Error),
     #[error("Expected all buildpacks to have the same version but multiple versions were found:\n{}", list_versions(.0))]
