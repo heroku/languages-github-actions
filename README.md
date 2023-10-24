@@ -96,8 +96,8 @@ Performs the release steps for one or more buildpacks by:
     > The following metadata is used for declaring the registry:
     >
     > ```toml
-    > [metadata.release.image]
-    > repository = "{repository_url}"
+    > [metadata.release]
+    > image = { repository = "docker.io/heroku/buildpack-example" }
     > ```
   * Retrieving the OCI image url published to Docker Hub and registering this with the CNB Registry
 * Once all buildpacks have been published, all the buildpack references found in [heroku/cnb-builder-images](https://github.com/heroku/cnb-builder-images)

@@ -21,8 +21,8 @@ pub(crate) enum Error {
     WritingBuilder(PathBuf, #[source] std::io::Error),
     #[error("No builder.toml files found in the given builder directories\n{}", list_builders(.0))]
     NoBuilderFiles(Vec<String>),
-    #[error("The following buildpack is missing the metadata.release.docker.repository entry\nPath: {}", .0.display())]
-    MissingDockerRepositoryMetadata(PathBuf),
+    #[error("The following buildpack is missing the metadata.release.image.repository entry\nPath: {}", .0.display())]
+    MissingImageRepositoryMetadata(PathBuf),
     #[error("Failed to calculate digest for buildpack\nPath: {}\nError: {1}", .0.display())]
     CalculatingDigest(PathBuf, #[source] CalculateDigestError),
     #[error("Missing required key `{0}` in builder")]
