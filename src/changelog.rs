@@ -705,6 +705,7 @@ mod parser {
     use markdown::{to_mdast, ParseOptions};
     use regex::Regex;
     use semver::Version;
+    use std::fmt::{Display, Formatter};
     use std::num::ParseIntError;
 
     const VERSION_CAPTURE: &str = r"(?P<version>\d+\.\d+\.\d+)";
@@ -994,22 +995,94 @@ mod parser {
         }
     }
 
+    impl Display for Changelog {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "{}",
+                r"
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+        "
+                .trim()
+            )?;
+
+            if let Some(unreleased) = &self.unreleased {
+                write!(f, "\n\n## [Unreleased]\n\n{unreleased}")?;
+            } else {
+                write!(f, "\n\n## [Unreleased]")?;
+            }
+
+            for entry in &self.releases {
+                write!(
+                    f,
+                    "\n\n## [{}] - {}",
+                    entry.version,
+                    entry.date.format("%Y-%m-%d")
+                )?;
+                if let Some(tag) = &entry.tag {
+                    write!(f, " [{tag}]")?;
+                }
+                write!(f, "\n\n{}", entry.contents)?;
+            }
+
+            writeln!(f)
+        }
+    }
+
+    impl Display for ReleaseContents {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            for (change_group, items) in &self.change_groups {
+                if !items.is_empty() {
+                    write!(f, "### {change_group}\n\n")?;
+                    for item in items {
+                        writeln!(f, "- {item}")?;
+                    }
+                }
+            }
+            writeln!(f)
+        }
+    }
+
+    impl Display for ReleaseTag {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ReleaseTag::Yanked => write!(f, "YANKED"),
+                ReleaseTag::NoChanges => write!(f, "NO CHANGES"),
+            }
+        }
+    }
+
+    impl Display for ChangeGroup {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ChangeGroup::Added => write!(f, "Added"),
+                ChangeGroup::Changed => write!(f, "Changed"),
+                ChangeGroup::Deprecated => write!(f, "Deprecated"),
+                ChangeGroup::Removed => write!(f, "Removed"),
+                ChangeGroup::Fixed => write!(f, "Fixed"),
+                ChangeGroup::Security => write!(f, "Security"),
+            }
+        }
+    }
+
     #[cfg(test)]
     mod test {
         use super::*;
 
-        #[test]
-        fn simple_test() {
-            let changelog = parse_changelog("
-# Changelog
+        const CHANGELOG: &str = "# Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-            
+
 ## [Unreleased]
-            
+
 ### Added
 
 - Node version x.y.z
@@ -1033,9 +1106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Drop explicit support for the End-of-Life stack `heroku-18`.
 
 [unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.0...v1.1.1",
-                        ).unwrap();
-            println!("{changelog:?}");
+[1.1.1]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.0...v1.1.1";
+
+        #[test]
+        fn simple_test() {
+            assert_eq!(parse_changelog(CHANGELOG).unwrap().to_string(), CHANGELOG);
         }
     }
 }
