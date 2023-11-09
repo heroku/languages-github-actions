@@ -696,3 +696,421 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Counter-examples: "What makes unicorns cry?".
 "#;
 }
+
+mod parser {
+    use chrono::{DateTime, LocalResult, TimeZone, Utc};
+    use indexmap::IndexMap;
+    use lazy_static::lazy_static;
+    use markdown::mdast::Node;
+    use markdown::{to_mdast, ParseOptions};
+    use regex::Regex;
+    use semver::Version;
+    use std::fmt::{Display, Formatter};
+    use std::num::ParseIntError;
+
+    const VERSION_CAPTURE: &str = r"(?P<version>\d+\.\d+\.\d+)";
+    const YEAR_CAPTURE: &str = r"(?P<year>\d{4})";
+    const MONTH_CAPTURE: &str = r"(?P<month>\d{2})";
+    const DAY_CAPTURE: &str = r"(?P<day>\d{2})";
+
+    const TAG_CAPTURE: &str = r"(?P<tag>.+)";
+
+    lazy_static! {
+        static ref UNRELEASED_HEADER: Regex =
+            Regex::new(r"(?i)^\[?unreleased]?$").expect("Should be a valid regex");
+        static ref VERSIONED_RELEASE_HEADER: Regex = Regex::new(&format!(
+            r"^\[?{VERSION_CAPTURE}]?\s+-\s+{YEAR_CAPTURE}[-/]{MONTH_CAPTURE}[-/]{DAY_CAPTURE}(?:\s+\[{TAG_CAPTURE}])?$"
+        ))
+        .expect("Should be a valid regex");
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
+    pub(crate) struct Changelog {
+        pub(crate) unreleased: Option<ReleaseContents>,
+        pub(crate) releases: Vec<ReleaseEntry>,
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
+    pub(crate) struct ReleaseEntry {
+        pub(crate) version: Version,
+        pub(crate) date: DateTime<Utc>,
+        pub(crate) tag: Option<ReleaseTag>,
+        pub(crate) contents: ReleaseContents,
+    }
+
+    #[derive(Debug)]
+    pub(crate) enum ReleaseEntryType {
+        Unreleased,
+        Versioned(Version, DateTime<Utc>, Option<ReleaseTag>),
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
+    pub(crate) enum ReleaseTag {
+        Yanked,
+        NoChanges,
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
+    pub(crate) struct ReleaseContents {
+        change_groups: IndexMap<ChangeGroup, Vec<String>>,
+    }
+
+    #[derive(Debug, Eq, PartialEq, Hash)]
+    pub(crate) enum ChangeGroup {
+        Added,
+        Changed,
+        Deprecated,
+        Removed,
+        Fixed,
+        Security,
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub(crate) enum ParseChangelogError {
+        #[error("Could not parse changelog as markdown\nError: {0}")]
+        Markdown(String),
+        #[error("Could not parse change group type from changelog\nExpected: Added | Changed | Deprecated | Removed | Fixed | Security\nValue: {0}")]
+        InvalidChangeGroup(String),
+        #[error("Release header did not match the expected format\nExpected: [Unreleased] | [<version>] - <yyyy>-<mm>-<dd> | [<version>] - <yyyy>-<mm>-<dd> [<tag>]\nValue: {0}")]
+        NoMatchForReleaseHeading(String),
+        #[error("Invalid semver version in release entry - {0}\nValue: {1}\nError: {2}")]
+        Version(String, String, #[source] semver::Error),
+        #[error("Invalid year in release entry - {0}\nValue: {1}\nError: {2}")]
+        ReleaseEntryYear(String, String, #[source] ParseIntError),
+        #[error("Invalid month in release entry - {0}\nValue: {1}\nError: {2}")]
+        ReleaseEntryMonth(String, String, #[source] ParseIntError),
+        #[error("Invalid day in release entry - {0}\nValue: {1}\nError: {2}")]
+        ReleaseEntryDay(String, String, #[source] ParseIntError),
+        #[error("Invalid date in release entry - {0}\nValue: {1}-{2}-{3}")]
+        InvalidReleaseDate(String, i32, u32, u32),
+        #[error("Ambiguous date in release entry - {0}\nValue: {1}-{2}-{3}")]
+        AmbiguousReleaseDate(String, i32, u32, u32),
+        #[error(
+            "Could not parse release tag from changelog\nExpected: YANKED | NO CHANGES\nValue: {1}"
+        )]
+        InvalidReleaseTag(String, String),
+    }
+
+    // Traverses the changelog written in markdown which has flattened entries that need to be parsed
+    // and converts those into a nested structure that matches the Keep a Changelog spec. For example,
+    // given the following markdown doc:
+    //
+    // ------------------------------------------
+    // # Changelog            → (Changelog)
+    //                        → -
+    // ## Unreleased          → (ReleaseEntry::Unreleased)
+    //                        → (ReleaseContents)
+    // ## [x.y.z] yyyy-mm-dd  → (ReleaseEntry::Versioned)
+    //                        → (ReleaseContents)
+    // ### Changed            → (ChangeGroup)
+    //                        → (List)
+    // - foo                  → (List Item)
+    // - bar                  → (List Item)
+    //                        → -
+    // ### Removed            → (ChangeGroup)
+    //                        → (List)
+    // - baz                  → (List Item)
+    // ------------------------------------------
+    // This would be represented in our Changelog AST as:
+    //
+    // Changelog {
+    //   unreleased: None,
+    //   releases: [
+    //     ReleaseEntry {
+    //       version: x.y.z,
+    //       date: yyyy-mm-dd,
+    //       tag: None,
+    //       contents: ReleaseContents {
+    //         "Changed": ["foo", "bar"],
+    //         "Removed": ["baz"]
+    //       }
+    //     }
+    //   ]
+    // }
+    pub(crate) fn parse_changelog(input: &str) -> Result<Changelog, ParseChangelogError> {
+        let changelog_ast =
+            to_mdast(input, &ParseOptions::default()).map_err(ParseChangelogError::Markdown)?;
+
+        let is_release_entry_heading = is_heading_of_depth(2);
+        let is_change_group_heading = is_heading_of_depth(3);
+        let is_list_node = |node: &Node| matches!(node, Node::List(_));
+
+        let mut unreleased = None;
+        let mut releases = vec![];
+
+        if let Node::Root(root) = changelog_ast {
+            // the peekable iterator here makes it easier to decide when to traverse to the next sibling
+            // node in the markdown AST to construct our nested structure
+            let mut root_iter = root.children.into_iter().peekable();
+            while root_iter.peek().is_some() {
+                if let Some(release_heading_node) = root_iter.next_if(&is_release_entry_heading) {
+                    let release_entry_type =
+                        parse_release_heading(release_heading_node.to_string())?;
+                    let mut change_groups = IndexMap::new();
+
+                    while root_iter.peek().is_some_and(&is_change_group_heading) {
+                        let change_group_node = root_iter.next().expect("This should be a change group heading node since we already peeked at it");
+                        let change_group =
+                            parse_change_group_heading(change_group_node.to_string())?;
+                        let changes = change_groups.entry(change_group).or_insert(vec![]);
+
+                        while root_iter.peek().is_some_and(is_list_node) {
+                            let list_node = root_iter
+                                .next()
+                                .expect("This should be a list node since we already peeked at it");
+                            if let Some(list_items) = list_node.children() {
+                                for list_item in list_items {
+                                    if matches!(list_item, Node::ListItem(_)) {
+                                        changes.push(list_item.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    match release_entry_type {
+                        ReleaseEntryType::Unreleased => {
+                            unreleased = Some(ReleaseContents { change_groups });
+                        }
+                        ReleaseEntryType::Versioned(version, date, tag) => {
+                            releases.push(ReleaseEntry {
+                                version,
+                                date,
+                                tag,
+                                contents: ReleaseContents { change_groups },
+                            });
+                        }
+                    }
+                } else {
+                    root_iter.next();
+                }
+            }
+        }
+
+        Ok(Changelog {
+            unreleased,
+            releases,
+        })
+    }
+
+    fn is_heading_of_depth(depth: u8) -> impl Fn(&Node) -> bool {
+        move |node: &Node| {
+            if let Node::Heading(heading) = node {
+                return heading.depth == depth;
+            }
+            false
+        }
+    }
+
+    fn parse_release_heading(heading: String) -> Result<ReleaseEntryType, ParseChangelogError> {
+        if UNRELEASED_HEADER.is_match(&heading) {
+            return Ok(ReleaseEntryType::Unreleased);
+        }
+
+        if let Some(captures) = VERSIONED_RELEASE_HEADER.captures(&heading) {
+            let version = captures["version"]
+                .parse::<semver::Version>()
+                .map_err(|e| {
+                    ParseChangelogError::Version(
+                        heading.clone(),
+                        captures["version"].to_string(),
+                        e,
+                    )
+                })?;
+
+            let year = captures["year"].parse::<i32>().map_err(|e| {
+                ParseChangelogError::ReleaseEntryYear(
+                    heading.clone(),
+                    captures["year"].to_string(),
+                    e,
+                )
+            })?;
+            let month = captures["month"].parse::<u32>().map_err(|e| {
+                ParseChangelogError::ReleaseEntryMonth(
+                    heading.clone(),
+                    captures["month"].to_string(),
+                    e,
+                )
+            })?;
+            let day = captures["day"].parse::<u32>().map_err(|e| {
+                ParseChangelogError::ReleaseEntryDay(
+                    heading.clone(),
+                    captures["day"].to_string(),
+                    e,
+                )
+            })?;
+
+            let date = match Utc.with_ymd_and_hms(year, month, day, 0, 0, 0) {
+                LocalResult::None => Err(ParseChangelogError::InvalidReleaseDate(
+                    heading.clone(),
+                    year,
+                    month,
+                    day,
+                )),
+                LocalResult::Single(value) => Ok(value),
+                LocalResult::Ambiguous(_, _) => Err(ParseChangelogError::AmbiguousReleaseDate(
+                    heading.clone(),
+                    year,
+                    month,
+                    day,
+                )),
+            }?;
+
+            let tag = if let Some(tag_value) = captures.name("tag") {
+                match tag_value.as_str().to_lowercase().as_str() {
+                    "no changes" => Ok(Some(ReleaseTag::NoChanges)),
+                    "yanked" => Ok(Some(ReleaseTag::Yanked)),
+                    _ => Err(ParseChangelogError::InvalidReleaseTag(
+                        heading.clone(),
+                        captures["tag"].to_string(),
+                    )),
+                }?
+            } else {
+                None
+            };
+
+            Ok(ReleaseEntryType::Versioned(version, date, tag))
+        } else {
+            Err(ParseChangelogError::NoMatchForReleaseHeading(heading))
+        }
+    }
+
+    fn parse_change_group_heading(heading: String) -> Result<ChangeGroup, ParseChangelogError> {
+        match heading.trim().to_lowercase().as_str() {
+            "added" => Ok(ChangeGroup::Added),
+            "changed" => Ok(ChangeGroup::Changed),
+            "deprecated" => Ok(ChangeGroup::Deprecated),
+            "removed" => Ok(ChangeGroup::Removed),
+            "fixed" => Ok(ChangeGroup::Fixed),
+            "security" => Ok(ChangeGroup::Security),
+            _ => Err(ParseChangelogError::InvalidChangeGroup(heading)),
+        }
+    }
+
+    impl TryFrom<&str> for Changelog {
+        type Error = ParseChangelogError;
+
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            parse_changelog(value)
+        }
+    }
+
+    impl Display for Changelog {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "{}",
+                r"
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+        "
+                .trim()
+            )?;
+
+            if let Some(unreleased) = &self.unreleased {
+                write!(f, "\n\n## [Unreleased]\n\n{unreleased}")?;
+            } else {
+                write!(f, "\n\n## [Unreleased]")?;
+            }
+
+            for entry in &self.releases {
+                write!(
+                    f,
+                    "\n\n## [{}] - {}",
+                    entry.version,
+                    entry.date.format("%Y-%m-%d")
+                )?;
+                if let Some(tag) = &entry.tag {
+                    write!(f, " [{tag}]")?;
+                }
+                write!(f, "\n\n{}", entry.contents)?;
+            }
+
+            writeln!(f)
+        }
+    }
+
+    impl Display for ReleaseContents {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            for (change_group, items) in &self.change_groups {
+                if !items.is_empty() {
+                    write!(f, "### {change_group}\n\n")?;
+                    for item in items {
+                        writeln!(f, "- {item}")?;
+                    }
+                }
+            }
+            writeln!(f)
+        }
+    }
+
+    impl Display for ReleaseTag {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ReleaseTag::Yanked => write!(f, "YANKED"),
+                ReleaseTag::NoChanges => write!(f, "NO CHANGES"),
+            }
+        }
+    }
+
+    impl Display for ChangeGroup {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ChangeGroup::Added => write!(f, "Added"),
+                ChangeGroup::Changed => write!(f, "Changed"),
+                ChangeGroup::Deprecated => write!(f, "Deprecated"),
+                ChangeGroup::Removed => write!(f, "Removed"),
+                ChangeGroup::Fixed => write!(f, "Fixed"),
+                ChangeGroup::Security => write!(f, "Security"),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        const CHANGELOG: &str = "# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Node version x.y.z
+
+## [1.1.6] - 2023-01-25
+
+### Added
+
+- Add basic OpenTelemetry tracing. ([#652](https://github.com/heroku/buildpacks-nodejs/pull/652))
+
+## [1.1.5] - 2023-09-19 [NO CHANGES]
+
+## [1.1.4] - 2023-08-10
+
+### Changed
+
+- Upgrade to Buildpack API version `0.9`. ([#552](https://github.com/heroku/buildpacks-nodejs/pull/552))
+
+### Removed
+
+- Drop explicit support for the End-of-Life stack `heroku-18`.
+
+[unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/olivierlacan/keep-a-changelog/compare/v1.1.0...v1.1.1";
+
+        #[test]
+        fn simple_test() {
+            assert_eq!(parse_changelog(CHANGELOG).unwrap().to_string(), CHANGELOG);
+        }
+    }
+}
