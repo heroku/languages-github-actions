@@ -204,9 +204,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b95f7c0680e4142284cf8b22c14a476e87d61b004a3a0861872b32ef7ead40a2"
+checksum = "7493d4c459da9f84325ad297371a6b2b8a162800873a22e3b6b6512e61d18c05"
 dependencies = [
  "bit-set",
  "regex",
@@ -371,9 +371,9 @@ checksum = "a08173bc88b7955d1b3145aa561539096c421ac8debde8cbc3612ec635fee29b"
 
 [[package]]
 name = "libcnb-common"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53c4c77089f294316c1d8a285d0ed9973e796a2653c676b22b3f7703d73aa828"
+checksum = "d05538b99137a5cf3077f5b9858081d478d08576ee08896344804f6e555a0670"
 dependencies = [
  "serde",
  "thiserror",
@@ -382,9 +382,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-data"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f35c4af3b47b67257263f0504897cf4db263b407b3e367971fc0b60ada69ce2"
+checksum = "7bc8b6f026254bc08ee3fb3b65d99c5b35be02c6c131f21c0c2ea02eecebdfbd"
 dependencies = [
  "fancy-regex",
  "libcnb-proc-macros",
@@ -396,9 +396,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-package"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5ee4c1ac95fc5f71b0f8901d62644f9d39dad0be9d1a5bf23fae173aaf2a46c"
+checksum = "b7c756f4b80401bff1a5130bc17b348fc1588ecb18c2b85abe5f9c1f69c425e7"
 dependencies = [
  "cargo_metadata",
  "ignore",
@@ -412,9 +412,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-proc-macros"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5effc8c71a7401899ea2885681b213b779449dc0f581663ea850d9de0718434c"
+checksum = "d7940af79192ed4043e2520231fa0162045296f6c601fe22f547b5f220ff4661"
 dependencies = [
  "cargo_metadata",
  "fancy-regex",
@@ -596,18 +596,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.189"
+version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e422a44e74ad4001bdc8eede9a4570ab52f71190e9c076d14369f38b9200537"
+checksum = "bca2a08484b285dcb282d0f67b26cadc0df8b19f8c12502c13d966bf9482f001"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.189"
+version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e48d1f918009ce3145511378cf68d613e3b3d9137d67272562080d68a2b32d5"
+checksum = "d6c7207fbec9faa48073f3e3074cbe553af6ea512d7c21ba46e434e70ea9fbc1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -636,9 +636,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.38"
+version = "2.0.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e96b79aaa137db8f61e26363a0c9b47d8b4ec75da28b7d1d614c2303e232408b"
+checksum = "23e78b90f2fcf45d3e842032ce32e3f2d1545ba6636271dcbf24fa306d87be7a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -803,14 +803,15 @@ checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
 
 [[package]]
 name = "which"
-version = "4.4.2"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
+checksum = "9bf3ea8596f3a0dd5980b46430f2058dfe2c36a27ccfbb1845d6fbfcd9ba6e14"
 dependencies = [
  "either",
  "home",
  "once_cell",
  "rustix",
+ "windows-sys",
 ]
 
 [[package]]
