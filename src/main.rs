@@ -1,6 +1,3 @@
-#![warn(clippy::pedantic)]
-#![warn(unused_crate_dependencies)]
-
 use crate::commands::generate_buildpack_matrix::command::GenerateBuildpackMatrixArgs;
 use crate::commands::generate_changelog::command::GenerateChangelogArgs;
 use crate::commands::prepare_release::command::PrepareReleaseArgs;
