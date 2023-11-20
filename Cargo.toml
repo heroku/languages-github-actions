@@ -3,7 +3,7 @@ name = "languages-github-actions"
 description = "GitHub Actions for the Languages Team"
 version = "0.0.1"
 repository = "https://github.com/heroku/languages-github-actions.git"
-rust-version = "1.66"
+rust-version = "1.74"
 edition = "2021"
 publish = false
 
@@ -13,6 +13,12 @@ path = "src/main.rs"
 
 [profile.release]
 strip = true
+
+[lints.rust]
+unused_crate_dependencies = "warn"
+
+[lints.clippy]
+pedantic = "warn"
 
 [dependencies]
 chrono = "0.4"
