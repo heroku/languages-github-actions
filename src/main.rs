@@ -16,7 +16,7 @@ const UNSPECIFIED_ERROR: i32 = 1;
 
 #[derive(Parser)]
 #[command(bin_name = "actions")]
-pub(crate) enum Cli {
+enum Cli {
     GenerateBuildpackMatrix(GenerateBuildpackMatrixArgs),
     GenerateChangelog(GenerateChangelogArgs),
     PrepareRelease(PrepareReleaseArgs),
