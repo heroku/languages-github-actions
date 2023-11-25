@@ -15,7 +15,6 @@ path = "src/main.rs"
 strip = true
 
 [dependencies]
-chrono = "0.4"
 clap = { version = "4", default-features = false, features = [
     "derive",
     "error-context",
@@ -24,15 +23,11 @@ clap = { version = "4", default-features = false, features = [
     "usage",
 ] }
 ignore = "0.4"
-indexmap = "2"
-lazy_static = "1"
+keep_a_changelog = { git = "https://github.com/colincasey/keep_a_changelog.git" }
 libcnb-common = "=0.15.0"
 libcnb-data = "=0.15.0"
 libcnb-package = "=0.15.0"
-markdown = "1.0.0-alpha.14"
 rand = "0.8"
-regex = "1"
-semver = "1"
 serde_json = "1"
 thiserror = "1"
 toml_edit = "0.19"

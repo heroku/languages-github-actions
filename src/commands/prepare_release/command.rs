@@ -1,18 +1,14 @@
 use crate::buildpacks::find_releasable_buildpacks;
-use crate::changelog::{generate_release_declarations, Changelog, ReleaseEntry};
 use crate::commands::prepare_release::errors::Error;
 use crate::github::actions;
-use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
-use indexmap::IndexMap;
+use keep_a_changelog::{ChangeGroup, Changelog, PromoteOptions, ReleaseLink, ReleaseTag};
 use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
-use semver::{BuildMetadata, Prerelease, Version};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::{value, ArrayOfTables, Document, Table};
-use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -23,8 +19,6 @@ pub(crate) struct PrepareReleaseArgs {
     pub(crate) bump: BumpCoordinate,
     #[arg(long)]
     pub(crate) repository_url: String,
-    #[arg(long)]
-    pub(crate) declarations_starting_version: Option<String>,
 }
 
 #[derive(ValueEnum, Debug, Clone)]
@@ -47,18 +41,7 @@ struct ChangelogFile {
 pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
     let current_dir = std::env::current_dir().map_err(Error::GetCurrentDir)?;
 
-    let repository_url = URI::try_from(args.repository_url.as_str())
-        .map(URI::into_owned)
-        .map_err(|e| Error::InvalidRepositoryUrl(args.repository_url.clone(), e))?;
-
-    let declarations_starting_version = args
-        .declarations_starting_version
-        .map(|value| {
-            value
-                .parse::<Version>()
-                .map_err(|e| Error::InvalidDeclarationsStartingVersion(value, e))
-        })
-        .transpose()?;
+    let repository_url = args.repository_url;
 
     let buildpack_dirs =
         find_releasable_buildpacks(&current_dir).map_err(Error::FindReleasableBuildpacks)?;
@@ -86,7 +69,8 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
 
     let next_version = get_next_version(&current_version, &args.bump);
 
-    for (mut buildpack_file, changelog_file) in buildpack_files.into_iter().zip(changelog_files) {
+    for (mut buildpack_file, mut changelog_file) in buildpack_files.into_iter().zip(changelog_files)
+    {
         let updated_dependencies = get_buildpack_dependency_ids(&buildpack_file)?
             .into_iter()
             .filter(|buildpack_id| updated_buildpack_ids.contains(buildpack_id))
@@ -106,22 +90,14 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
             buildpack_file.path.display(),
         );
 
-        let new_changelog = promote_changelog_unreleased_to_version(
-            &changelog_file.changelog,
+        promote_changelog_unreleased_to_version(
+            &mut changelog_file.changelog,
             &next_version,
-            &Utc::now(),
+            &repository_url,
             &updated_dependencies,
-        );
+        )?;
 
-        let release_declarations = generate_release_declarations(
-            &new_changelog,
-            repository_url.to_string(),
-            &declarations_starting_version,
-        );
-
-        let changelog_contents = format!("{new_changelog}\n{release_declarations}\n");
-
-        write(&changelog_file.path, changelog_contents)
+        write(&changelog_file.path, changelog_file.changelog.to_string())
             .map_err(|e| Error::WritingChangelog(changelog_file.path.clone(), e))?;
 
         eprintln!(
@@ -148,7 +124,8 @@ fn read_buildpack_file(path: PathBuf) -> Result<BuildpackFile> {
 fn read_changelog_file(path: PathBuf) -> Result<ChangelogFile> {
     let contents =
         std::fs::read_to_string(&path).map_err(|e| Error::ReadingChangelog(path.clone(), e))?;
-    let changelog = Changelog::try_from(contents.as_str())
+    let changelog = contents
+        .parse()
         .map_err(|e| Error::ParsingChangelog(path.clone(), e))?;
     Ok(ChangelogFile { path, changelog })
 }
@@ -309,94 +286,72 @@ fn update_buildpack_contents_with_new_version(
 }
 
 fn promote_changelog_unreleased_to_version(
-    changelog: &Changelog,
-    version: &BuildpackVersion,
-    date: &DateTime<Utc>,
+    changelog: &mut Changelog,
+    next_version: &BuildpackVersion,
+    repository_url: &String,
     updated_dependencies: &HashSet<BuildpackId>,
-) -> Changelog {
-    let updated_dependencies_text = if updated_dependencies.is_empty() {
-        None
-    } else {
-        let mut updated_dependencies_bullet_points = updated_dependencies
-            .iter()
-            .map(|id| format!("- Updated `{id}` to `{version}`."))
-            .collect::<Vec<_>>();
-        updated_dependencies_bullet_points.sort();
-        Some(updated_dependencies_bullet_points.join("\n"))
-    };
-
-    let changes_with_dependencies = (&changelog.unreleased, &updated_dependencies_text);
-
-    let body = if let (Some(changes), Some(dependencies)) = changes_with_dependencies {
-        merge_existing_changelog_entries_with_dependency_changes(changes, dependencies)
-    } else if let (Some(changes), None) = changes_with_dependencies {
-        changes.clone()
-    } else if let (None, Some(dependencies)) = changes_with_dependencies {
-        format!("### Changed\n\n{dependencies}")
-    } else {
-        "- No changes.".to_string()
-    };
-
-    let new_release_entry = ReleaseEntry {
-        version: Version {
-            major: version.major,
-            minor: version.minor,
-            patch: version.patch,
-            pre: Prerelease::default(),
-            build: BuildMetadata::default(),
-        },
-        date: *date,
-        body,
-    };
-
-    let mut releases = IndexMap::from([(version.to_string(), new_release_entry)]);
-    for (id, entry) in &changelog.releases {
-        releases.insert(id.clone(), entry.clone());
+) -> Result<()> {
+    // record dependency updates in the changelog
+    let sorted_updated_dependencies = updated_dependencies
+        .iter()
+        .map(ToString::to_string)
+        .collect::<BTreeSet<_>>();
+    for updated_dependency in sorted_updated_dependencies {
+        changelog.unreleased.add(
+            ChangeGroup::Changed,
+            format!("Updated `{updated_dependency}` to `{next_version}`."),
+        );
     }
-    Changelog {
-        unreleased: None,
-        releases,
-    }
-}
 
-fn merge_existing_changelog_entries_with_dependency_changes(
-    changelog_entries: &str,
-    updated_dependencies: &str,
-) -> String {
-    if changelog_entries.contains("### Changed") {
-        changelog_entries
-            .split("### ")
-            .map(|entry| {
-                if entry.starts_with("Changed") {
-                    format!("{}\n{}\n\n", entry.trim_end(), updated_dependencies)
-                } else {
-                    entry.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("### ")
+    // create a new release entry from unreleased
+    let release_version: keep_a_changelog::Version = next_version
+        .to_string()
+        .parse()
+        .map_err(Error::ParseChangelogReleaseVersion)?;
+
+    let previous_version = changelog
+        .releases
+        .into_iter()
+        .next()
+        .map(|release| release.version.clone());
+
+    let new_release_link: ReleaseLink = if let Some(value) = previous_version {
+        format!("{repository_url}/compare/v{value}...v{release_version}")
     } else {
-        format!(
-            "{}\n\n### Changed\n\n{}",
-            changelog_entries.trim_end(),
-            updated_dependencies
-        )
+        format!("{repository_url}/releases/tag/v{release_version}")
     }
+    .parse()
+    .map_err(Error::ParseReleaseLink)?;
+
+    let mut promote_options =
+        PromoteOptions::new(release_version.clone()).with_link(new_release_link);
+    if changelog.unreleased.changes.is_empty() {
+        promote_options = promote_options.with_tag(ReleaseTag::NoChanges);
+    }
+
+    changelog
+        .promote_unreleased(&promote_options)
+        .map_err(Error::PromoteUnreleased)?;
+
+    changelog.unreleased.link = Some(
+        format!("{repository_url}/compare/v{release_version}...HEAD")
+            .parse()
+            .map_err(Error::ParseReleaseLink)?,
+    );
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod test {
-    use crate::changelog::{Changelog, ReleaseEntry};
     use crate::commands::prepare_release::command::{
         get_fixed_version, promote_changelog_unreleased_to_version,
         update_buildpack_contents_with_new_version, BuildpackFile,
     };
     use crate::commands::prepare_release::errors::Error;
-    use chrono::{TimeZone, Utc};
-    use indexmap::IndexMap;
+    use keep_a_changelog::{Changelog, ReleaseDate};
     use libcnb_data::buildpack::BuildpackVersion;
     use libcnb_data::buildpack_id;
-    use semver::Version;
     use std::collections::{HashMap, HashSet};
     use std::path::PathBuf;
     use std::str::FromStr;
@@ -558,287 +513,412 @@ optional = true
 
     #[test]
     fn test_promote_changelog_unreleased_to_version_with_existing_entries() {
-        let release_entry_0_8_16 = ReleaseEntry {
-            version: "0.8.16".parse::<Version>().unwrap(),
-            date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
-            body: "- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.\n- Added node version 18.14.0, 19.6.0.".to_string()
-        };
+        let mut changelog: Changelog = "\
+# Changelog
 
-        let release_entry_0_8_15 = ReleaseEntry {
-            version: "0.8.15".parse::<Version>().unwrap(),
-            date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
-            body: "- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))\n- Added node version 19.5.0.".to_string()
-        };
+All notable changes to this project will be documented in this file.
 
-        let changelog = Changelog {
-            unreleased: Some(
-                "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2".to_string(),
-            ),
-            releases: IndexMap::from([
-                ("0.8.16".to_string(), release_entry_0_8_16.clone()),
-                ("0.8.15".to_string(), release_entry_0_8_15.clone()),
-            ]),
-        };
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-        assert_eq!(
-            changelog.unreleased,
-            Some("- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2".to_string())
-        );
-        assert_eq!(changelog.releases.get("0.8.17"), None);
-        assert_eq!(
-            changelog.releases.get("0.8.16"),
-            Some(&release_entry_0_8_16)
-        );
-        assert_eq!(
-            changelog.releases.get("0.8.15"),
-            Some(&release_entry_0_8_15)
-        );
+## [Unreleased]
+
+### Added
+
+- Added node version 18.15.0.
+- Added yarn version 4.0.0-rc.2
+
+## [0.8.16] - 2023-02-27
+
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...HEAD
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n".parse().unwrap();
 
         let next_version = BuildpackVersion {
             major: 0,
             minor: 8,
             patch: 17,
         };
-        let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
         let updated_dependencies = HashSet::new();
-        let changelog = promote_changelog_unreleased_to_version(
-            &changelog,
+        let repository_url = "https://github.com/heroku/buildpacks-nodejs".to_string();
+        let today = ReleaseDate::today();
+        promote_changelog_unreleased_to_version(
+            &mut changelog,
             &next_version,
-            &date,
+            &repository_url,
             &updated_dependencies,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(changelog.unreleased, None);
-        assert_eq!(
-            changelog.releases.get("0.8.17"),
-            Some(&ReleaseEntry {
-                version: "0.8.17".parse::<Version>().unwrap(),
-                date,
-                body: "- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2".to_string()
-            })
-        );
-        assert_eq!(
-            changelog.releases.get("0.8.16"),
-            Some(&release_entry_0_8_16)
-        );
-        assert_eq!(
-            changelog.releases.get("0.8.15"),
-            Some(&release_entry_0_8_15)
-        );
+        assert_eq!(changelog.to_string(), format!("\
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.8.17] - {today}
+
+### Added
+
+- Added node version 18.15.0.
+- Added yarn version 4.0.0-rc.2
+
+## [0.8.16] - 2023-02-27
+
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.17...HEAD
+[0.8.17]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...v0.8.17
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n"
+        ));
     }
 
     #[test]
     fn test_promote_changelog_unreleased_to_version_with_no_entries() {
-        let changelog = Changelog {
-            unreleased: None,
-            releases: IndexMap::new(),
-        };
+        let mut changelog: Changelog = "\
+# Changelog
 
-        assert_eq!(changelog.unreleased, None);
-        assert_eq!(changelog.releases.get("0.8.17"), None);
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## Unreleased
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs\n"
+            .parse()
+            .unwrap();
 
         let next_version = BuildpackVersion {
             major: 0,
             minor: 8,
             patch: 17,
         };
-        let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
         let updated_dependencies = HashSet::new();
-        let changelog = promote_changelog_unreleased_to_version(
-            &changelog,
+        let repository_url = "https://github.com/heroku/buildpacks-nodejs".to_string();
+        let today = ReleaseDate::today();
+        promote_changelog_unreleased_to_version(
+            &mut changelog,
             &next_version,
-            &date,
+            &repository_url,
             &updated_dependencies,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(changelog.unreleased, None);
         assert_eq!(
-            changelog.releases.get("0.8.17"),
-            Some(&ReleaseEntry {
-                version: "0.8.17".parse::<Version>().unwrap(),
-                date,
-                body: "- No changes.".to_string()
-            })
+            changelog.to_string(),
+            format!(
+                "\
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.8.17] - {today} [NO CHANGES]
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.17...HEAD
+[0.8.17]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v0.8.17\n"
+            )
         );
     }
 
     #[test]
     fn test_promote_changelog_unreleased_to_version_with_existing_entries_and_updated_dependencies()
     {
-        let release_entry_0_8_16 = ReleaseEntry {
-            version: "0.8.16".parse::<Version>().unwrap(),
-            date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
-            body: "### Added\n\n- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.\n- Added node version 18.14.0, 19.6.0.".to_string()
-        };
+        let mut changelog: Changelog = "\
+# Changelog
 
-        let release_entry_0_8_15 = ReleaseEntry {
-            version: "0.8.15".parse::<Version>().unwrap(),
-            date: Utc.with_ymd_and_hms(2023, 2, 27, 0, 0, 0).unwrap(),
-            body: "### Changed\n\n- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))\n\n### Added\n\n- Added node version 19.5.0.".to_string()
-        };
+All notable changes to this project will be documented in this file.
 
-        let changelog = Changelog {
-            unreleased: Some(
-                "### Added\n\n- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2"
-                    .to_string(),
-            ),
-            releases: IndexMap::from([
-                ("0.8.16".to_string(), release_entry_0_8_16.clone()),
-                ("0.8.15".to_string(), release_entry_0_8_15.clone()),
-            ]),
-        };
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-        assert_eq!(
-            changelog.unreleased,
-            Some(
-                "### Added\n\n- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2"
-                    .to_string()
-            )
-        );
-        assert_eq!(changelog.releases.get("0.8.17"), None);
-        assert_eq!(
-            changelog.releases.get("0.8.16"),
-            Some(&release_entry_0_8_16)
-        );
-        assert_eq!(
-            changelog.releases.get("0.8.15"),
-            Some(&release_entry_0_8_15)
-        );
+## [Unreleased]
+
+### Added
+
+- Added node version 18.15.0.
+- Added yarn version 4.0.0-rc.2
+
+## [0.8.16] - 2023-02-27
+
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...HEAD
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n".parse().unwrap();
 
         let next_version = BuildpackVersion {
             major: 0,
             minor: 8,
             patch: 17,
         };
-        let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
         let updated_dependencies = HashSet::from([buildpack_id!("b"), buildpack_id!("a")]);
-        let changelog = promote_changelog_unreleased_to_version(
-            &changelog,
+        let repository_url = "https://github.com/heroku/buildpacks-nodejs".to_string();
+        let today = ReleaseDate::today();
+        promote_changelog_unreleased_to_version(
+            &mut changelog,
             &next_version,
-            &date,
+            &repository_url,
             &updated_dependencies,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(changelog.unreleased, None);
-        assert_eq!(
-            changelog.releases.get("0.8.17"),
-            Some(&ReleaseEntry {
-                version: "0.8.17".parse::<Version>().unwrap(),
-                date,
-                body: "### Added\n\n- Added node version 18.15.0.\n- Added yarn version 4.0.0-rc.2\n\n### Changed\n\n- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`.".to_string()
-            })
-        );
-        assert_eq!(
-            changelog.releases.get("0.8.16"),
-            Some(&release_entry_0_8_16)
-        );
-        assert_eq!(
-            changelog.releases.get("0.8.15"),
-            Some(&release_entry_0_8_15)
-        );
+        assert_eq!(changelog.to_string(), format!("\
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.8.17] - {today}
+
+### Added
+
+- Added node version 18.15.0.
+- Added yarn version 4.0.0-rc.2
+
+### Changed
+
+- Updated `a` to `0.8.17`.
+- Updated `b` to `0.8.17`.
+
+## [0.8.16] - 2023-02-27
+
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.17...HEAD
+[0.8.17]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...v0.8.17
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n"
+        ));
     }
 
     #[test]
     fn test_promote_changelog_unreleased_to_version_with_no_entries_and_updated_dependencies() {
-        let changelog = Changelog {
-            unreleased: None,
-            releases: IndexMap::new(),
-        };
+        let mut changelog: Changelog = "\
+# Changelog
 
-        assert_eq!(changelog.unreleased, None);
-        assert_eq!(changelog.releases.get("0.8.17"), None);
+All notable changes to this project will be documented in this file.
 
-        let next_version = BuildpackVersion {
-            major: 0,
-            minor: 8,
-            patch: 17,
-        };
-        let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
-        let updated_dependencies = HashSet::from([buildpack_id!("a"), buildpack_id!("b")]);
-        let changelog = promote_changelog_unreleased_to_version(
-            &changelog,
-            &next_version,
-            &date,
-            &updated_dependencies,
-        );
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-        assert_eq!(changelog.unreleased, None);
-        assert_eq!(
-            changelog.releases.get("0.8.17"),
-            Some(&ReleaseEntry {
-                version: "0.8.17".parse::<Version>().unwrap(),
-                date,
-                body: "### Changed\n\n- Updated `a` to `0.8.17`.\n- Updated `b` to `0.8.17`."
-                    .to_string()
-            })
-        );
-    }
+## [Unreleased]
 
-    #[test]
-    fn test_promote_changelog_unreleased_to_version_with_changed_entries_is_merged_with_updated_dependencies(
-    ) {
-        let changelog = Changelog {
-            unreleased: Some(
-                r"
-- Entry not under a header
+## [0.8.16] - 2023-02-27
 
 ### Added
 
-- Added node version 18.15.0.
-- Added yarn version 4.0.0-rc.2
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
 
-### Changed
+## [0.8.15] - 2023-02-26
 
-- Lowed limits
+### Added
 
-### Removed
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
 
-- Dropped all deprecated methods
-                "
-                .trim()
-                .to_string(),
-            ),
-            releases: IndexMap::new(),
-        };
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...HEAD
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n".parse().unwrap();
 
         let next_version = BuildpackVersion {
             major: 0,
             minor: 8,
             patch: 17,
         };
-        let date = Utc.with_ymd_and_hms(2023, 6, 16, 0, 0, 0).unwrap();
         let updated_dependencies = HashSet::from([buildpack_id!("b"), buildpack_id!("a")]);
-        let changelog = promote_changelog_unreleased_to_version(
-            &changelog,
+        let repository_url = "https://github.com/heroku/buildpacks-nodejs".to_string();
+        let today = ReleaseDate::today();
+        promote_changelog_unreleased_to_version(
+            &mut changelog,
             &next_version,
-            &date,
+            &repository_url,
             &updated_dependencies,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(changelog.unreleased, None);
-        assert_eq!(
-            changelog.releases.get("0.8.17").unwrap().body,
-            r"
-- Entry not under a header
+        assert_eq!(changelog.to_string(), format!("\
+# Changelog
 
-### Added
+All notable changes to this project will be documented in this file.
 
-- Added node version 18.15.0.
-- Added yarn version 4.0.0-rc.2
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.8.17] - {today}
 
 ### Changed
 
-- Lowed limits
 - Updated `a` to `0.8.17`.
 - Updated `b` to `0.8.17`.
 
-### Removed
+## [0.8.16] - 2023-02-27
 
-- Dropped all deprecated methods
-            "
-            .trim()
-            .to_string()
-        );
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.17...HEAD
+[0.8.17]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...v0.8.17
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n"
+        ));
+    }
+    #[test]
+    fn test_promote_changelog_unreleased_to_version_with_changed_entries_is_merged_with_updated_dependencies(
+    ) {
+        let mut changelog: Changelog = "\
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Changed
+
+- Added feature X
+
+## [0.8.16] - 2023-02-27
+
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...HEAD
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n".parse().unwrap();
+
+        let next_version = BuildpackVersion {
+            major: 0,
+            minor: 8,
+            patch: 17,
+        };
+        let updated_dependencies = HashSet::from([buildpack_id!("b"), buildpack_id!("a")]);
+        let repository_url = "https://github.com/heroku/buildpacks-nodejs".to_string();
+        let today = ReleaseDate::today();
+        promote_changelog_unreleased_to_version(
+            &mut changelog,
+            &next_version,
+            &repository_url,
+            &updated_dependencies,
+        )
+        .unwrap();
+
+        assert_eq!(changelog.to_string(), format!("\
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.8.17] - {today}
+
+### Changed
+
+- Added feature X
+- Updated `a` to `0.8.17`.
+- Updated `b` to `0.8.17`.
+
+## [0.8.16] - 2023-02-27
+
+### Added
+
+- Added node version 19.7.0, 19.6.1, 14.21.3, 16.19.1, 18.14.1, 18.14.2.
+- Added node version 18.14.0, 19.6.0.
+
+## [0.8.15] - 2023-02-26
+
+### Added
+
+- `name` is no longer a required field in package.json. ([#447](https://github.com/heroku/buildpacks-nodejs/pull/447))
+- Added node version 19.5.0.
+
+[unreleased]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.17...HEAD
+[0.8.17]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.16...v0.8.17
+[0.8.16]: https://github.com/heroku/buildpacks-nodejs/compare/v0.8.15...v0.8.16
+[0.8.15]: https://github.com/heroku/buildpacks-nodejs/releases/tag/v/v0.8.15\n"
+        ));
     }
 
     fn create_buildpack_file(contents: &str) -> BuildpackFile {

@@ -1,5 +1,4 @@
 use crate::buildpacks::FindReleasableBuildpacksError;
-use crate::changelog::ChangelogError;
 use crate::github::actions::SetActionOutputError;
 use libcnb_data::buildpack::BuildpackVersion;
 use std::collections::HashMap;
@@ -14,10 +13,6 @@ pub(crate) enum Error {
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]
     SetActionOutput(SetActionOutputError),
-    #[error("Invalid URL `{0}` for argument --repository-url\nError: {1}")]
-    InvalidRepositoryUrl(String, #[source] uriparse::URIError),
-    #[error("Invalid Version `{0}` for argument --declarations-starting-version\nError: {1}")]
-    InvalidDeclarationsStartingVersion(String, #[source] semver::Error),
     #[error("No buildpacks found under {}", .0.display())]
     NoBuildpacksFound(PathBuf),
     #[error("Not all versions match:\n{}", list_versions_with_path(.0))]
@@ -27,7 +22,13 @@ pub(crate) enum Error {
     #[error("Could not read changelog\nPath: {}\nError: {1}", .0.display())]
     ReadingChangelog(PathBuf, #[source] io::Error),
     #[error("Could not parse changelog\nPath: {}\nError: {1}", .0.display())]
-    ParsingChangelog(PathBuf, #[source] ChangelogError),
+    ParsingChangelog(PathBuf, #[source] keep_a_changelog::ParseChangelogError),
+    #[error(transparent)]
+    ParseChangelogReleaseVersion(keep_a_changelog::ParseVersionError),
+    #[error(transparent)]
+    ParseReleaseLink(keep_a_changelog::ParseReleaseLinkError),
+    #[error(transparent)]
+    PromoteUnreleased(keep_a_changelog::PromoteUnreleasedError),
     #[error("Could not write changelog\nPath: {}\nError: {1}", .0.display())]
     WritingChangelog(PathBuf, #[source] io::Error),
     #[error("Missing required field `{1}` in buildpack.toml\nPath: {}", .0.display())]

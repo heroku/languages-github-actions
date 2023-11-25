@@ -11,7 +11,6 @@ use crate::commands::{
 use clap::Parser;
 
 mod buildpacks;
-mod changelog;
 mod commands;
 mod github;
 

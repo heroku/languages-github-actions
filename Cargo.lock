@@ -345,21 +345,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "keep_a_changelog"
+version = "0.1.0"
+source = "git+https://github.com/colincasey/keep_a_changelog.git#ae3de50600e5efde76287f7f42aceb6dc7d2fece"
+dependencies = [
+ "chrono",
+ "indexmap",
+ "lazy_static",
+ "markdown",
+ "regex",
+ "semver",
+ "thiserror",
+ "uriparse",
+]
+
+[[package]]
 name = "languages-github-actions"
 version = "0.0.1"
 dependencies = [
- "chrono",
  "clap",
  "ignore",
- "indexmap",
- "lazy_static",
+ "keep_a_changelog",
  "libcnb-common",
  "libcnb-data",
  "libcnb-package",
- "markdown",
  "rand",
- "regex",
- "semver",
  "serde_json",
  "thiserror",
  "toml 0.7.6",
