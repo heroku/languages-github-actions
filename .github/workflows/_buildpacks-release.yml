@@ -105,7 +105,7 @@ jobs:
       # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
         run: |
-          if [ "${{ inputs.libcncb_cargo_version }}" == "default" ]; then
+          if [ "${{ inputs.libcnb_cargo_version }}" == "default" ]; then
             LOCKFILE_URL="https://raw.githubusercontent.com/heroku/languages-github-actions/${{ inputs.languages_cli_branch }}/Cargo.lock"
             LIBCNB_PACKAGE_VERSION=$( \
               curl --silent --show-error --fail --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 "${LOCKFILE_URL}" \
