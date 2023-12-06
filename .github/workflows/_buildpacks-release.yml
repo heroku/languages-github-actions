@@ -118,7 +118,9 @@ jobs:
             buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
             targets=$(echo "${buildpack}" | jq -c -r '.targets')
             cd "${buildpack_dir}"
-            if [ -f "${buildpack_dir}/Cargo.toml" ]; then
+            if [ -f "${buildpack_dir}/bin/build" ] && [ -f "${buildpack_dir}/bin/detect" ]; then
+              echo "Skipping ${buildpack_dir}"
+            else
               if [ "[]" = "${targets}" ]; then
                 cargo libcnb package --release --package-dir "${package_dir}"
               else
@@ -253,10 +255,10 @@ jobs:
               echo "${targets}" | jq -c -r '.[]' | while read target; do
                 if [ "arm64-linux" = "${target}" ]; then
                   output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
-                  pack buildpack package "${artifact_prefix}-${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+                  pack buildpack package "${artifact_prefix}_${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
                 elif [ "amd64-linux" = "${target}" ]; then
                   output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
-                  pack buildpack package "${artifact_prefix}-${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+                  pack buildpack package "${artifact_prefix}_${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
                 fi
               done
             fi
