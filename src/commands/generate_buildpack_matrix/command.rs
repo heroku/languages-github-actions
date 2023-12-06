@@ -75,24 +75,7 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
 
     let targets = buildpack_dirs
         .iter()
-        .flat_map(|dir| {
-            let contents = std::fs::read_to_string(&dir.join("buildpack.toml")).unwrap();
-            let document = Document::from_str(&contents).unwrap();
-            document
-                .get("metadata")
-                .and_then(Item::as_table_like)
-                .unwrap_or(&toml_edit::Table::default())
-                .get("targets")
-                .and_then(Item::as_array_of_tables)
-                .unwrap_or(&ArrayOfTables::default())
-                .iter()
-                .map(|item| {
-                    let arch = item.get("arch").and_then(Item::as_str).unwrap();
-                    let os = item.get("os").and_then(Item::as_str).unwrap();
-                    format!("{arch}-{os}")
-                })
-                .collect::<Vec<_>>()
-        })
+        .flat_map(|dir| read_buildpack_targets(dir))
         .collect::<HashSet<_>>();
 
     actions::set_output("targets", serde_json::to_string(&targets).unwrap()).unwrap();
@@ -104,35 +87,67 @@ pub(crate) fn extract_buildpack_info(
     buildpack_descriptor: &BuildpackDescriptor,
     buildpack_dir: &Path,
     packaged_buildpack_dir_resolver: &impl Fn(&BuildpackId) -> PathBuf,
-) -> Result<BTreeMap<String, String>> {
+) -> Result<BTreeMap<String, serde_json::Value>> {
     Ok(BTreeMap::from([
         (
             "buildpack_id".to_string(),
-            buildpack_descriptor.buildpack().id.to_string(),
+            serde_json::Value::String(buildpack_descriptor.buildpack().id.to_string()),
         ),
         (
             "buildpack_version".to_string(),
-            buildpack_descriptor.buildpack().version.to_string(),
+            serde_json::Value::String(buildpack_descriptor.buildpack().version.to_string()),
         ),
         (
             "buildpack_dir".to_string(),
-            buildpack_dir.to_string_lossy().to_string(),
+            serde_json::Value::String(buildpack_dir.to_string_lossy().to_string()),
         ),
         (
             "buildpack_artifact_prefix".to_string(),
-            default_buildpack_directory_name(&buildpack_descriptor.buildpack().id),
+            serde_json::Value::String(default_buildpack_directory_name(
+                &buildpack_descriptor.buildpack().id,
+            )),
         ),
         (
             "buildpack_output_dir".to_string(),
-            packaged_buildpack_dir_resolver(&buildpack_descriptor.buildpack().id)
-                .to_string_lossy()
-                .to_string(),
+            serde_json::Value::String(
+                packaged_buildpack_dir_resolver(&buildpack_descriptor.buildpack().id)
+                    .to_string_lossy()
+                    .to_string(),
+            ),
         ),
         (
             "docker_repository".to_string(),
-            read_image_repository_metadata(buildpack_descriptor).ok_or(
+            serde_json::Value::String(read_image_repository_metadata(buildpack_descriptor).ok_or(
                 Error::MissingImageRepositoryMetadata(buildpack_dir.join("buildpack.toml")),
-            )?,
+            )?),
+        ),
+        (
+            "targets".to_string(),
+            serde_json::Value::Array(
+                read_buildpack_targets(buildpack_dir)
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect(),
+            ),
         ),
     ]))
+}
+
+fn read_buildpack_targets(buildpack_dir: &Path) -> Vec<String> {
+    let contents = std::fs::read_to_string(buildpack_dir.join("buildpack.toml")).unwrap();
+    let document = Document::from_str(&contents).unwrap();
+    document
+        .get("metadata")
+        .and_then(Item::as_table_like)
+        .unwrap_or(&toml_edit::Table::default())
+        .get("targets")
+        .and_then(Item::as_array_of_tables)
+        .unwrap_or(&ArrayOfTables::default())
+        .iter()
+        .map(|item| {
+            let arch = item.get("arch").and_then(Item::as_str).unwrap();
+            let os = item.get("os").and_then(Item::as_str).unwrap();
+            format!("{arch}-{os}")
+        })
+        .collect()
 }

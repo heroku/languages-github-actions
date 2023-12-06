@@ -81,23 +81,20 @@ jobs:
         id: generate-buildpack-matrix
         run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
 
-      - name: Checkpoint 1
-        run: echo "${{ steps.generate-buildpack-matrix.outputs.targets }}"
-
-      - name: Install cross-compile tooling
-        run: |
-          echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
-            echo "target: ${target}"
-          done
-
-      - name: Install musl-tools
-        run: sudo apt-get install musl-tools --no-install-recommends
-
       - name: Update Rust toolchain
         run: rustup update
 
-      - name: Install Rust linux-musl target
-        run: rustup target add x86_64-unknown-linux-musl
+      - name: Install cross-compile tooling
+        run: |
+          sudo apt-get install musl-tools --no-install-recommends
+          echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
+            if [ "arm64-linux" = "${target}"]; then
+              sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
+              rustup target add aarch64-unknown-linux-musl
+            elif [ "amd64-linux" = "${target}"]; then
+              rustup target add x86_64-unknown-linux-musl
+            fi
+          done
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.1
@@ -113,11 +110,27 @@ jobs:
           )
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
-
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
-
+        run: |
+          pushd
+          echo '${{ steps.generate-buildpack-matrix.outputs.buildpacks }}' | jq -c '.[]' | while read buildpack; do
+            buildpack_dir=$(echo "${buildpack}" | jq -c '.buildpack_dir')
+            targets=$(echo "${buildpack}" | jq -c '.targets')
+            cd "${buildpack_dir}"
+            if [ "[]" = "${targets}"]; then
+              cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
+            else
+              echo "${targets}" | jq -c '.[]' | while read target; do
+                if [ "arm64-linux" = "${target}"]; then
+                  cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target aarch64-unknown-linux-musl
+                elif [ "amd64-linux" = "${target}"]; then
+                  cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target x86_64-unknown-linux-musl
+                fi
+              done
+            fi
+            popd
+          done
 
       - name: Generate changelog
         id: generate-changelog
