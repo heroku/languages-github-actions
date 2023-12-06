@@ -88,10 +88,10 @@ jobs:
         run: |
           sudo apt-get install musl-tools --no-install-recommends
           echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
-            if [ "arm64-linux" = "${target}"]; then
+            if [ "arm64-linux" = "${target}" ]; then
               sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
               rustup target add aarch64-unknown-linux-musl
-            elif [ "amd64-linux" = "${target}"]; then
+            elif [ "amd64-linux" = "${target}" ]; then
               rustup target add x86_64-unknown-linux-musl
             fi
           done
@@ -113,7 +113,7 @@ jobs:
       - name: Package buildpacks
         id: libcnb-package
         run: |
-          pushd
+          pushd .
           echo '${{ steps.generate-buildpack-matrix.outputs.buildpacks }}' | jq -c '.[]' | while read buildpack; do
             buildpack_dir=$(echo "${buildpack}" | jq -c '.buildpack_dir')
             targets=$(echo "${buildpack}" | jq -c '.targets')
@@ -122,9 +122,9 @@ jobs:
               cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
             else
               echo "${targets}" | jq -c '.[]' | while read target; do
-                if [ "arm64-linux" = "${target}"]; then
+                if [ "arm64-linux" = "${target}" ]; then
                   cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target aarch64-unknown-linux-musl
-                elif [ "amd64-linux" = "${target}"]; then
+                elif [ "amd64-linux" = "${target}" ]; then
                   cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target x86_64-unknown-linux-musl
                 fi
               done
