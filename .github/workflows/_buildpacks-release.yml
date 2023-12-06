@@ -132,7 +132,6 @@ jobs:
               fi
             fi
           done
-          ls -R ${{ env.PACKAGE_DIR }}
 
       - name: Generate changelog
         id: generate-changelog
@@ -244,9 +243,23 @@ jobs:
       - name: Generate CNB files
         run: |
           for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+            targets=$(echo "${buildpack}" | jq -c -r '.targets')
             artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
-            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
-            pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+
+            if [ "[]" = "${targets}" ]; then
+              output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+              pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+            else
+              echo "${targets}" | jq -c -r '.[]' | while read target; do
+                if [ "arm64-linux" = "${target}" ]; then
+                  output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
+                  pack buildpack package "${artifact_prefix}-${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+                elif [ "amd64-linux" = "${target}" ]; then
+                  output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
+                  pack buildpack package "${artifact_prefix}-${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+                fi
+              done
+            fi
           done
 
       - name: Get token for GitHub application (Linguist)
