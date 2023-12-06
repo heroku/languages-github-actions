@@ -114,6 +114,7 @@ jobs:
         id: libcnb-package
         run: |
           echo '${{ steps.generate-buildpack-matrix.outputs.buildpacks }}' | jq -c '.[]' | while read buildpack; do
+            echo "${buildpack}"
             buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
             targets=$(echo "${buildpack}" | jq -c -r '.targets')
             cd "${buildpack_dir}"
