@@ -113,7 +113,6 @@ jobs:
       - name: Package buildpacks
         id: libcnb-package
         run: |
-          pushd .
           echo '${{ steps.generate-buildpack-matrix.outputs.buildpacks }}' | jq -c '.[]' | while read buildpack; do
             buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
             targets=$(echo "${buildpack}" | jq -c -r '.targets')
@@ -129,7 +128,6 @@ jobs:
                 fi
               done
             fi
-            popd
           done
 
       - name: Generate changelog
