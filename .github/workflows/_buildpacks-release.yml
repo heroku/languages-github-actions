@@ -87,11 +87,14 @@ jobs:
       - name: Install cross-compile tooling
         run: |
           sudo apt-get install musl-tools --no-install-recommends
-          echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
+          echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c -r '.[]' | while read target; do
+            echo "${target}"
             if [ "arm64-linux" = "${target}" ]; then
+              echo "Install aarch tools"
               sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
               rustup target add aarch64-unknown-linux-musl
             elif [ "amd64-linux" = "${target}" ]; then
+              echo "Install x86_64 tools"
               rustup target add x86_64-unknown-linux-musl
             fi
           done
@@ -115,13 +118,14 @@ jobs:
         run: |
           pushd .
           echo '${{ steps.generate-buildpack-matrix.outputs.buildpacks }}' | jq -c '.[]' | while read buildpack; do
-            buildpack_dir=$(echo "${buildpack}" | jq -c '.buildpack_dir')
-            targets=$(echo "${buildpack}" | jq -c '.targets')
+            echo "${buildpack}"
+            buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
+            targets=$(echo "${buildpack}" | jq -c -r '.targets')
             cd "${buildpack_dir}"
             if [ "[]" = "${targets}"]; then
               cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
             else
-              echo "${targets}" | jq -c '.[]' | while read target; do
+              echo "${targets}" | jq -c -r '.[]' | while read target; do
                 if [ "arm64-linux" = "${target}" ]; then
                   cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target aarch64-unknown-linux-musl
                 elif [ "amd64-linux" = "${target}" ]; then
