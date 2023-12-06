@@ -113,23 +113,26 @@ jobs:
       - name: Package buildpacks
         id: libcnb-package
         run: |
+          package_dir=$(realpath "${{ env.PACKAGE_DIR }}")
           echo '${{ steps.generate-buildpack-matrix.outputs.buildpacks }}' | jq -c '.[]' | while read buildpack; do
-            echo "${buildpack}"
             buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
             targets=$(echo "${buildpack}" | jq -c -r '.targets')
             cd "${buildpack_dir}"
-            if [ "[]" = "${targets}" ]; then
-              cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
-            else
-              echo "${targets}" | jq -c -r '.[]' | while read target; do
-                if [ "arm64-linux" = "${target}" ]; then
-                  cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target aarch64-unknown-linux-musl
-                elif [ "amd64-linux" = "${target}" ]; then
-                  cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }} --target x86_64-unknown-linux-musl
-                fi
-              done
+            if [ -f "${buildpack_dir}/Cargo.toml" ]; then
+              if [ "[]" = "${targets}" ]; then
+                cargo libcnb package --release --package-dir "${package_dir}"
+              else
+                echo "${targets}" | jq -c -r '.[]' | while read target; do
+                  if [ "arm64-linux" = "${target}" ]; then
+                    cargo libcnb package --release --package-dir "${package_dir}" --target aarch64-unknown-linux-musl
+                  elif [ "amd64-linux" = "${target}" ]; then
+                    cargo libcnb package --release --package-dir "${package_dir}" --target x86_64-unknown-linux-musl
+                  fi
+                done
+              fi
             fi
           done
+          ls -R ${{ env.PACKAGE_DIR }}
 
       - name: Generate changelog
         id: generate-changelog
