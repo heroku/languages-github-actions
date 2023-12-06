@@ -71,6 +71,19 @@ jobs:
         with:
           submodules: true
 
+      - name: Install Languages CLI
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        with:
+          branch: ${{ inputs.languages_cli_branch }}
+          update_rust_toolchain: false
+
+      - name: Generate buildpack matrix
+        id: generate-buildpack-matrix
+        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
+
+      - name: Checkpoint 1
+        run: echo "${{ steps.generate-buildpack-matrix.outputs.targets }}"
+
       - name: Install musl-tools
         run: sudo apt-get install musl-tools --no-install-recommends
 
@@ -94,19 +107,11 @@ jobs:
           )
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
-      - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
-        with:
-          branch: ${{ inputs.languages_cli_branch }}
-          update_rust_toolchain: false
 
       - name: Package buildpacks
         id: libcnb-package
         run: cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
 
-      - name: Generate buildpack matrix
-        id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Generate changelog
         id: generate-changelog

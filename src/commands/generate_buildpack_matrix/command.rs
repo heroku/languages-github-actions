@@ -12,6 +12,8 @@ use libcnb_package::output::{
 use libcnb_package::CargoProfile;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use toml_edit::{ArrayOfTables, Document, Item};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -70,6 +72,27 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
         .ok_or(Error::FixedVersion(versions.clone()))?;
 
     actions::set_output("version", version).map_err(Error::SetActionOutput)?;
+
+    let targets = buildpack_dirs
+        .iter()
+        .flat_map(|dir| {
+            let contents = std::fs::read_to_string(&dir.join("buildpack.toml")).unwrap();
+            let document = Document::from_str(&contents).unwrap();
+            document
+                .get("targets")
+                .and_then(Item::as_array_of_tables)
+                .unwrap_or(&ArrayOfTables::default())
+                .iter()
+                .map(|item| {
+                    let os = item.get("os").and_then(Item::as_str).unwrap();
+                    let arch = item.get("arch").and_then(Item::as_str).unwrap();
+                    format!("{os}-{arch}")
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<HashSet<_>>();
+
+    actions::set_output("targets", serde_json::to_string(&targets).unwrap()).unwrap();
 
     Ok(())
 }
