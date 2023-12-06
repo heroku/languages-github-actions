@@ -79,14 +79,17 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
             let contents = std::fs::read_to_string(&dir.join("buildpack.toml")).unwrap();
             let document = Document::from_str(&contents).unwrap();
             document
+                .get("metadata")
+                .and_then(Item::as_table_like)
+                .unwrap_or(&toml_edit::Table::default())
                 .get("targets")
                 .and_then(Item::as_array_of_tables)
                 .unwrap_or(&ArrayOfTables::default())
                 .iter()
                 .map(|item| {
-                    let os = item.get("os").and_then(Item::as_str).unwrap();
                     let arch = item.get("arch").and_then(Item::as_str).unwrap();
-                    format!("{os}-{arch}")
+                    let os = item.get("os").and_then(Item::as_str).unwrap();
+                    format!("{arch}-{os}")
                 })
                 .collect::<Vec<_>>()
         })

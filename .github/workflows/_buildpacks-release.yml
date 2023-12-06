@@ -84,6 +84,12 @@ jobs:
       - name: Checkpoint 1
         run: echo "${{ steps.generate-buildpack-matrix.outputs.targets }}"
 
+      - name: Install cross-compile tooling
+        run: |
+          '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
+            echo "target: ${target}"
+          done
+
       - name: Install musl-tools
         run: sudo apt-get install musl-tools --no-install-recommends
 
