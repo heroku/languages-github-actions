@@ -60,7 +60,7 @@ env:
 jobs:
   compile:
     name: Compile Buildpacks
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     outputs:
       buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
       version: ${{ steps.generate-buildpack-matrix.outputs.version }}
@@ -71,14 +71,33 @@ jobs:
         with:
           submodules: true
 
-      - name: Install musl-tools
-        run: sudo apt-get install musl-tools --no-install-recommends
+      - name: Install Languages CLI
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        with:
+          branch: ${{ inputs.languages_cli_branch }}
+          update_rust_toolchain: false
+
+      - name: Generate buildpack matrix
+        id: generate-buildpack-matrix
+        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Update Rust toolchain
         run: rustup update
 
-      - name: Install Rust linux-musl target
-        run: rustup target add x86_64-unknown-linux-musl
+      - name: Install cross-compile tooling
+        env:
+          RUST_TRIPLES: ${{ steps.generate-buildpack-matrix.outputs.rust_triples }}
+        run: |
+          for triple in $(jq --exit-status -r '.[]' <<< "${RUST_TRIPLES}"); do
+            if [[ "$triple" == "aarch64-unknown-linux-musl" ]]; then
+              sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
+            elif [[ "$triple" == "x86_64-unknown-linux-musl" ]]; then
+              sudo apt-get install musl-tools --no-install-recommends
+            else
+              echo "WARNING: Unknown triple: $triple. Cross-compile dependencies were skipped."
+            fi
+            rustup target add "$triple"
+          done
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.3
@@ -94,19 +113,23 @@ jobs:
           )
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
-      - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
-        with:
-          branch: ${{ inputs.languages_cli_branch }}
-          update_rust_toolchain: false
-
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
-
-      - name: Generate buildpack matrix
-        id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
+        env:
+          BUILDPACKS: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
+        run: |
+          package_dir=$(realpath "${{ env.PACKAGE_DIR }}")
+          for buildpack in $(jq --exit-status -c '.[]' <<< "${BUILDPACKS}"); do
+            buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
+            if [ -f "${buildpack_dir}/bin/build" ] && [ -f "${buildpack_dir}/bin/detect" ]; then
+              echo "Skipping ${buildpack_dir}"
+              continue
+            fi
+            cd "${buildpack_dir}"
+            for triple in $(jq --exit-status -r '.targets | map(.rust_triple) | .[]' <<< "${buildpack}"); do
+              cargo libcnb package --release --package-dir "${package_dir}" --target "${triple}"
+            done
+          done
 
       - name: Generate changelog
         id: generate-changelog
@@ -122,7 +145,7 @@ jobs:
           # copy any bash-based buildpack to target buildpack dir because `cargo libcnb package` will ignore them
           for buildpack in $(jq --exit-status -c '.[]' <<< "${buildpacks}"); do
             buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
-            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+            output_dir=$(jq --exit-status -r '.targets[0].output_dir' <<< "${buildpack}")
             if [ ! -d "${output_dir}" ]; then
               echo "bash-based buildpack detected at ${buildpack_dir}"
               cp -R "${buildpack_dir}" "${output_dir}"
@@ -133,20 +156,21 @@ jobs:
 
           # replace dependencies that reference a bash-buildpack
           for buildpack in $(jq --exit-status -c '.[]' <<< "${buildpacks}"); do
-            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
-            echo "checking dependencies in ${output_dir}/package.toml"
-            for dep in $(yq -oy '.dependencies[].uri' "${output_dir}/package.toml"); do
-              if realpath "${dep}" &> /dev/null; then
-                dep_path=$(realpath "${dep}")
-                for i in "${!bash_buildpack_source_dirs[@]}"; do
-                  bash_buildpack_source_dir="${bash_buildpack_source_dirs[$i]}"
-                  bash_buildpack_output_dir="${bash_buildpack_output_dirs[$i]}"
-                  if [ "${bash_buildpack_source_dir}" = "${dep_path}" ]; then
-                    echo "replacing ${dep} with ${bash_buildpack_output_dir}"
-                    sed -i 's|'"$dep"'|'"$bash_buildpack_output_dir"'|g' "${output_dir}/package.toml"
-                  fi
-                done
-              fi
+            for output_dir in $(jq --exit-status -r '.targets | map(.output_dir) | .[]' <<< "${buildpack}"); do
+              echo "checking dependencies in ${output_dir}/package.toml"
+              for dep in $(yq -oy '.dependencies[].uri' "${output_dir}/package.toml"); do
+                if realpath "${dep}" &> /dev/null; then
+                  dep_path=$(realpath "${dep}")
+                  for i in "${!bash_buildpack_source_dirs[@]}"; do
+                    bash_buildpack_source_dir="${bash_buildpack_source_dirs[$i]}"
+                    bash_buildpack_output_dir="${bash_buildpack_output_dirs[$i]}"
+                    if [ "${bash_buildpack_source_dir}" = "${dep_path}" ]; then
+                      echo "replacing ${dep} with ${bash_buildpack_output_dir}"
+                      sed -i 's|'"$dep"'|'"$bash_buildpack_output_dir"'|g' "${output_dir}/package.toml"
+                    fi
+                  done
+                fi
+              done
             done
           done
 
@@ -177,26 +201,103 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.6.0
 
-      - name: Create Docker Image
-        run: pack buildpack package ${{ matrix.buildpack_id }} --config ${{ matrix.buildpack_output_dir }}/package.toml -v
+      - name: Check if version is already on Docker Hub
+        id: check
+        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - name: Login to Docker Hub
-        if: inputs.dry_run == false
+        if: steps.check.outputs.published_to_docker == 'false'
         uses: docker/login-action@v3.1.0
         with:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
 
-      - name: Check if version is already on Docker Hub
-        id: check
-        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
-      - name: Tag and publish buildpack
-        if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
+      - name: Publish to Docker Hub
+        if: steps.check.outputs.published_to_docker == 'false'
+        env:
+          TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
-          docker tag ${{ matrix.buildpack_id }} ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
-          docker push ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
+          temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
+          perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
+          target_count=$(jq --exit-status -r length <<< "${TARGETS}")
+          if (( target_count == 1 )); then
+            output_dir=$(jq --exit-status -r '.[0].output_dir' <<< "${TARGETS}")
+            # Build+push single-arch image to a temp tag
+            pack buildpack package "${temp_tag}" --config "${output_dir}/package.toml" -v --publish
+            # Promote the temp tag if this isn't a dry run
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
+              docker tag "${temp_tag}" "${perm_tag}"
+              docker push "${perm_tag}"
+            fi
+          else
+            # Build a list of manifest image tags, one for each os/arch.
+            manifests=($(jq --exit-status -r "map(.oci_platform) | map(\"${temp_tag}_\(sub(\"/\";\"-\"))\") | join(\" \")" <<< "${TARGETS}"))
+            echo "manifests: ${manifests[@]}"
+
+            for i in "${!manifests[@]}"; do
+              output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${TARGETS}")
+              echo "Packaging ${output_dir} into manifest: ${manifests[i]}"
+              pack buildpack package "${manifests[i]}" --config "${output_dir}/package.toml" -v --publish
+            done
+
+            # create a manifest list using platform-specific images created above.
+            docker manifest create "${temp_tag}" "${manifests[@]}"
+
+            # annotate each of the manifests with the correct os/arch
+            for i in "${!manifests[@]}"; do
+              platform=$(jq --exit-status -r ".[$i].oci_platform" <<< "${TARGETS}")
+              os=$(cut -d "/" -f1 <<< "${platform}")
+              arch=$(cut -d "/" -f2 <<< "${platform}")
+              echo "Annotating ${temp_tag} / ${manifests[i]} with ${os}/${arch}"
+              docker manifest annotate "${temp_tag}" "${manifests[i]}" --os "${os}" --arch "${arch}"
+            done
+
+            # Push the manifest list / image index to a disposable tag
+            docker manifest push "${temp_tag}"
+
+            # If this isn't a dry run, promote temp tags to a stable tag
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
+              for platform in $(jq --exit-status -r "map(.oci_platform) | .[]" <<< "${TARGETS}"); do
+                docker tag "${temp_tag}_${platform//\//-}" "${perm_tag}_${platform//\//-}"
+                docker push "${perm_tag}_${platform//\//-}"
+              done
+              docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
+            fi
+          fi
+
+      - name: Unpublish temp tags from this run
+        if: always()
+        env:
+          TARGETS: ${{ toJSON(matrix.targets) }}
+        run: |
+          dockerhub_token=$(curl -sS -f --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -H "Content-Type: application/json" -X POST -d "{\"username\": \"${{ secrets.docker_hub_user }}\", \"password\": \"${{ secrets.docker_hub_token }}\"}" https://hub.docker.com/v2/users/login/ | jq --exit-status -r .token)
+          namespace=$(cut -d "/" -f2 <<< "${{ matrix.docker_repository }}")
+          repo=$(cut -d "/" -f3 <<< "${{ matrix.docker_repository }}")
+          temp_tag_base="_${{ github.run_id }}"
+          temp_tags=("${temp_tag_base}")
+          for platform in $(jq --exit-status -r 'map(.oci_platform) | .[]' <<< ${TARGETS}); do
+            temp_tags+=("${temp_tag_base}_${platform//\//-}")
+          done
+          status=0
+          for temp_tag in "${temp_tags[@]}"; do
+            echo "Deleting ${namespace}/${repo}:${temp_tag}"
+            response=$(curl -sS --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -X DELETE \
+              -H "Authorization: JWT ${dockerhub_token}" \
+              "https://hub.docker.com/v2/namespaces/${namespace}/repositories/${repo}/tags/${temp_tag}"
+            )
+
+            if [[ -z $response ]]; then
+              echo "Deleted."
+            elif [[ $response =~ "tag not found" ]]; then
+              echo "Tag does not exist."
+            else
+              echo "Couldn't delete. Response: ${response}"
+              status=22
+            fi
+          done
+          exit $status
 
   publish-github:
     name: Publish → GitHub Release
@@ -218,9 +319,20 @@ jobs:
       - name: Generate CNB files
         run: |
           for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+            targets=$(jq --exit-status -c '.targets' <<< "${buildpack}")
+            target_count=$(jq --exit-status -r 'length' <<< "${targets}")
             artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
-            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
-            pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+
+            for ((i=0;i<target_count;i++)); do
+              output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${targets}")
+              if (( target_count == 1)); then
+                cnb_file="${artifact_prefix}.cnb"
+              else
+                platform=$(jq --exit-status -r ".[$i].oci_platform" <<< "${targets}")
+                cnb_file="${artifact_prefix}_${platform//\//-}.cnb"
+              fi
+              pack buildpack package "$cnb_file" --config "${output_dir}/package.toml" --format file --verbose
+            done
           done
 
       - name: Get token for GitHub application (Linguist)
