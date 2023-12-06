@@ -86,7 +86,7 @@ jobs:
 
       - name: Install cross-compile tooling
         run: |
-          '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
+          echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c '.[]' | while read target; do
             echo "target: ${target}"
           done
 
