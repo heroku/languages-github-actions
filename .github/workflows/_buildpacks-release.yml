@@ -86,15 +86,21 @@ jobs:
 
       - name: Install cross-compile tooling
         run: |
-          sudo apt-get install musl-tools --no-install-recommends
-          echo '${{ steps.generate-buildpack-matrix.outputs.targets }}' | jq -c -r '.[]' | while read target; do
-            if [ "arm64-linux" = "${target}" ]; then
-              sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
-              rustup target add aarch64-unknown-linux-musl
-            elif [ "amd64-linux" = "${target}" ]; then
-              rustup target add x86_64-unknown-linux-musl
-            fi
-          done
+          targets='${{ steps.generate-buildpack-matrix.outputs.targets }}'
+          if [ "[]" = "${targets}" ]; then
+            sudo apt-get install musl-tools --no-install-recommends
+            rustup target add x86_64-unknown-linux-musl
+          else
+            echo "${targets}" | jq -c -r '.[]' | while read target; do
+              if [ "arm64-linux" = "${target}" ]; then
+                sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
+                rustup target add aarch64-unknown-linux-musl
+              elif [ "amd64-linux" = "${target}" ]; then
+                sudo apt-get install musl-tools --no-install-recommends
+                rustup target add x86_64-unknown-linux-musl
+              fi
+            done
+          fi
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.1
@@ -278,7 +284,7 @@ jobs:
         run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-#        if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
+        if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
         uses: softprops/action-gh-release@v0.1.15
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
