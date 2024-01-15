@@ -1,11 +1,7 @@
 [package]
 name = "languages-github-actions"
-description = "GitHub Actions for the Languages Team"
-version = "0.0.1"
-repository = "https://github.com/heroku/languages-github-actions.git"
-rust-version = "1.74"
+rust-version = "1.75"
 edition = "2021"
-publish = false
 
 [[bin]]
 name = "actions"
