@@ -148,6 +148,53 @@ jobs:
 | `docker_hub_user`    | The username to login to Docker Hub with                            | true     |
 | `docker_hub_token`   | The token to login to Docker Hub with                               | true     |
 
+### Classic Buildpack - Prepare Release
+
+Prepares a "classic" buildpack release by:
+- updating changelogs
+- opening a PR against the repository with the modified files
+
+You can pin to:
+- the [latest release](https://github.com/heroku/languages-github-actions/releases/latest) version with `@latest`
+- a [specific release](https://github.com/heroku/languages-github-actions/releases) version with `@v{major}.{minor}.{patch}`
+- the development version with `@main`
+
+#### Example Usage
+
+```yaml
+name: Prepare Classic Buildpack Releases
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare-release:
+    uses: heroku/languages-github-actions/.github/workflows/_classic-buildpack-prepare-release.yml@latest
+    with:
+      app_id: ${{ vars.GH_APP_ID }}
+      buildpack_name: -- YOUR BUILDPACK'S NAME --
+    secrets:
+      app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+```
+
+#### Inputs
+
+| Name                     | Description                                                                        | Required | Default                                |
+|--------------------------|------------------------------------------------------------------------------------|----------|----------------------------------------|
+| `app_id`                 | Application ID of GitHub application (e.g. the Linguist App)                       | true     |                                        |
+| `app_email`              | The email address of the GitHub application bot user (e.g.; the Linguist App)      | false    | `${{ vars.LINGUIST_GH_APP_EMAIL }}`    |
+| `app_username`           | The username of the GitHub application bot user (e.g.; the Linguist App)           | false    | `${{ vars.LINGUIST_GH_APP_USERNAME }}` |
+| `buildpack_name`         | The name of the buildpack we're preparing                                          | true     |                                        |
+| `ip_allowlisted_runner`  | The GitHub Actions runner to use to run jobs that require IP allow-list privileges | false    | `pub-hk-ubuntu-22.04-small`            |
+| `unreleased_header_text` | The header used to indicate unreleased changes in the CHANGELOG.md                 | false    | `Unreleased`                           |
+
+#### Secrets
+
+| Name              | Description                                  | Required |
+|-------------------|----------------------------------------------|----------|
+| `app_private_key` | Private key of GitHub application (Linguist) | true     |
+
 ## Actions
 
 ### Install Languages CLI
