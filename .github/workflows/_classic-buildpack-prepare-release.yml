@@ -39,6 +39,9 @@ jobs:
           ref: main
           # Tags are not fetched by default, but we need them to determine the existing buildpack version.
           fetch-tags: true
+          # Force a full clone, otherwise fetch-tags doesn't actually fetch any tags:
+          # https://github.com/actions/checkout/issues/1471
+          fetch-depth: 0
           token: ${{ steps.generate-token.outputs.app_token }}
 
       - name: Determine existing tagged version
