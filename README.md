@@ -148,6 +148,43 @@ jobs:
 | `docker_hub_user`    | The username to login to Docker Hub with                            | true     |
 | `docker_hub_token`   | The token to login to Docker Hub with                               | true     |
 
+### Classic Buildpack - Prepare Release
+
+Prepares a "classic" buildpack release by:
+- updating the changelog
+- opening a PR against the repository with the modified files
+
+You can pin to:
+- the [latest release](https://github.com/heroku/languages-github-actions/releases/latest) version with `@latest`
+- a [specific release](https://github.com/heroku/languages-github-actions/releases) version with `@v{major}.{minor}.{patch}`
+- the development version with `@main`
+
+#### Example Usage
+
+```yaml
+name: Prepare Buildpack Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare-release:
+    uses: heroku/languages-github-actions/.github/workflows/_classic-buildpack-prepare-release.yml@latest
+    secrets: inherit
+```
+
+#### Inputs
+
+| Name                    | Description                                                                                                                    | Required | Default |
+|-------------------------|--------------------------------------------------------------------------------------------------------------------------------|----------|---------|
+| `custom_update_command` | An additional command to run before changes are committed, which can make use of the env vars EXISTING_VERSION and NEW_VERSION | false    |         |
+
+In addition, the workflow requires that the `LINGUIST_*` env vars are available (which are set as organization variables).
+
+#### Secrets
+
+The workflow requires that `inherit` mode be enabled, so that it can access the `LINGUIST_GH_PRIVATE_KEY` organization secret.
+
 ## Actions
 
 ### Install Languages CLI
