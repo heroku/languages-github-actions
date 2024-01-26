@@ -151,7 +151,7 @@ jobs:
           done
 
       - name: Cache buildpacks
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
           path: ${{ env.PACKAGE_DIR }}
@@ -166,7 +166,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Restore buildpacks
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
@@ -204,7 +204,7 @@ jobs:
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
       - name: Restore buildpacks
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
