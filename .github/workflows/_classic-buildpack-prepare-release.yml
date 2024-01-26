@@ -83,9 +83,10 @@ jobs:
           token: ${{ steps.generate-token.outputs.app_token }}
           title: Prepare release v${{ steps.new-version.outputs.version }}
           body: |
-            Commits since last release:
+            Commits since the last release:
             ${{ steps.unreleased-commits.outputs.commits }}
 
+            For the full diff, see the compare view:
             https://github.com/${{ github.repository }}/compare/v${{ steps.existing-version.outputs.version }}...main
           commit-message: Prepare release v${{ steps.new-version.outputs.version }}
           branch: prepare-release
