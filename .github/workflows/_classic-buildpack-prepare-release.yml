@@ -74,7 +74,13 @@ jobs:
 
       - name: Generate list of unreleased commits
         id: unreleased-commits
-        run: echo "commits=$(git log --topo-order --reverse --format='- %s' v${{ steps.existing-version.outputs.version }}...main)" >> "${GITHUB_OUTPUT}"
+        # See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+        run: |
+          {
+            echo 'commits<<COMMITS_LIST_END'
+            git log --topo-order --reverse --format='- %s' v${{ steps.existing-version.outputs.version }}...main
+            echo COMMITS_LIST_END
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Create pull request
         id: pr
