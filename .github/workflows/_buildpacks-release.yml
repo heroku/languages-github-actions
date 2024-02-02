@@ -210,17 +210,18 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.5.1
 
+      - name: Check if version is already on Docker Hub
+        id: check
+        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
       - name: Login to Docker Hub
-        if: inputs.dry_run == false
         uses: docker/login-action@v3.0.0
+        if: steps.check.outputs.published_to_docker == 'false'
         with:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
 
-      - name: Check if version is already on Docker Hub
-        id: check
-        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - name: Publish to Docker Hub
         if: steps.check.outputs.published_to_docker == 'false'
