@@ -225,10 +225,10 @@ jobs:
       - name: Publish to Docker Hub
         if: steps.check.outputs.published_to_docker == 'false'
         run: |
-          echo "matrix: ${{ matrix }}"
+          echo "matrix: ${{ fromJSON(matrix) }}"
           temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
           perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
-          targets=$(echo "${{ matrix.targets }}" | jq -c -r 'join(" ")')
+          targets=$(echo "${{ fromJSON(matrix.targets) }}" | jq -c -r 'join(" ")')
           echo "targets: ${targets[@]}"
           if [ -z "${targets}" ]; then
             # Build+push single-arch (linux/amd64) image to a temp tag
