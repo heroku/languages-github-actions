@@ -247,7 +247,7 @@ jobs:
               if [ "arm64-linux" = "${targets[i]}" ]; then
                 output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
               elif [ "amd64-linux" = "${targets[i]}" ]; then
-                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.buildlpack_artifact_prefix }}"
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
               fi
 
               echo "output_dir: ${output_dir}"
