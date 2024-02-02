@@ -236,7 +236,7 @@ jobs:
             pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v
           else
             # Build a list of manifest images, one for each os/arch.
-            manifests=($(echo "\"${targets[@]}\"" | jq -c -r 'split(" ") | map("${temp_tag}_\(.)") | join(" ")'))
+            manifests=($(echo "${TARGETS}" | jq -c -r "map(\"${temp_tag}_\(.)\") | join(\" \")"))
             echo "manifests: ${manifests[@]}"
 
             # Build+push a buildpack image for each architecture to a temp tag
@@ -245,9 +245,9 @@ jobs:
               echo "manifest: ${manifests[i]}"
 
               if [ "arm64-linux" = "${targets[i]}" ]; then
-                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.artifact_prefix }}"
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
               elif [ "amd64-linux" = "${targets[i]}" ]; then
-                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.artifact_prefix }}"
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.buildlpack_artifact_prefix }}"
               fi
 
               echo "output_dir: ${output_dir}"
