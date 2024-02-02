@@ -225,10 +225,11 @@ jobs:
       - name: Publish to Docker Hub
         if: steps.check.outputs.published_to_docker == 'false'
         run: |
+          echo "matrix: ${{ matrix }}"
           temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
           perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
-          artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
-          targets=$(echo "${{ matrix.buildpack }}" | jq -c -r '.targets | join(" ")')
+          targets=$(echo "${{ matrix.targets }}" | jq -c -r 'join(" ")')
+          echo "targets: ${targets[@]}"
           if [ -z "${targets}" ]; then
             # Build+push single-arch (linux/amd64) image to a temp tag
             output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
@@ -241,9 +242,9 @@ jobs:
             # Build+push a buildpack image for each architecture to a temp tag
             for i in "${targets[@]}"; do
               if [ "arm64-linux" = "${targets[i]}" ]; then
-                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.artifact_prefix }}"
               elif [ "amd64-linux" = "${targets[i]}" ]; then
-                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.artifact_prefix }}"
               fi
 
               echo "target: ${targets[i]}"
