@@ -147,7 +147,7 @@ fn read_buildpack_targets(buildpack_dir: &Path) -> Vec<String> {
         .map(|item| {
             let arch = item.get("arch").and_then(Item::as_str).unwrap();
             let os = item.get("os").and_then(Item::as_str).unwrap();
-            format!("{arch}-{os}")
+            format!("{os}-{arch}")
         })
         .collect()
 }

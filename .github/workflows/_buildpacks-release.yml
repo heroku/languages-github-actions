@@ -92,10 +92,10 @@ jobs:
             rustup target add x86_64-unknown-linux-musl
           else
             echo "${targets}" | jq -c -r '.[]' | while read target; do
-              if [ "arm64-linux" = "${target}" ]; then
+              if [ "linux-arm64" = "${target}" ]; then
                 sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
                 rustup target add aarch64-unknown-linux-musl
-              elif [ "amd64-linux" = "${target}" ]; then
+              elif [ "linux-amd64" = "${target}" ]; then
                 sudo apt-get install musl-tools --no-install-recommends
                 rustup target add x86_64-unknown-linux-musl
               fi
@@ -131,9 +131,9 @@ jobs:
                 cargo libcnb package --release --package-dir "${package_dir}"
               else
                 echo "${targets}" | jq -c -r '.[]' | while read target; do
-                  if [ "arm64-linux" = "${target}" ]; then
+                  if [ "linux-arm64" = "${target}" ]; then
                     cargo libcnb package --release --package-dir "${package_dir}" --target aarch64-unknown-linux-musl
-                  elif [ "amd64-linux" = "${target}" ]; then
+                  elif [ "linux-amd64" = "${target}" ]; then
                     cargo libcnb package --release --package-dir "${package_dir}" --target x86_64-unknown-linux-musl
                   fi
                 done
@@ -245,9 +245,9 @@ jobs:
               echo "target: ${targets[i]}"
               echo "manifest: ${manifests[i]}"
 
-              if [ "arm64-linux" = "${targets[i]}" ]; then
+              if [ "linux-arm64" = "${targets[i]}" ]; then
                 output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
-              elif [ "amd64-linux" = "${targets[i]}" ]; then
+              elif [ "linux-amd64" = "${targets[i]}" ]; then
                 output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
               fi
 
@@ -306,10 +306,10 @@ jobs:
               pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
             else
               echo "${targets}" | jq -c -r '.[]' | while read target; do
-                if [ "arm64-linux" = "${target}" ]; then
+                if [ "linux-arm64" = "${target}" ]; then
                   output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
                   pack buildpack package "${artifact_prefix}_${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
-                elif [ "amd64-linux" = "${target}" ]; then
+                elif [ "linux-amd64" = "${target}" ]; then
                   output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
                   pack buildpack package "${artifact_prefix}_${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
                 fi
