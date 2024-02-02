@@ -237,17 +237,19 @@ jobs:
           else
             # Build a list of manifest images, one for each os/arch.
             manifests=$(echo "\"${targets[@]}\"" | jq -c -r 'split(" ") | map("${temp_tag}_\(.)") | join(" ")')
+            echo "manifests: ${manifests[@]}"
 
             # Build+push a buildpack image for each architecture to a temp tag
-            for i in "${targets[@]}"; do
+            for i in "${!targets[@]}"; do
+              echo "target: ${targets[i]}"
+              echo "manifest: ${manifests[i]}"
+
               if [ "arm64-linux" = "${targets[i]}" ]; then
                 output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.artifact_prefix }}"
               elif [ "amd64-linux" = "${targets[i]}" ]; then
                 output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.artifact_prefix }}"
               fi
 
-              echo "target: ${targets[i]}"
-              echo "manifest: ${manifests[i]}"
               echo "output_dir: ${output_dir}"
 
               pack buildpack package "${manifests[i]}" --config "${output_dir}/package.toml" -v --publish
@@ -258,7 +260,7 @@ jobs:
             docker manifest create "${temp_tag}" "${manifests[@]}"
 
             # annotate each of the manifests with the correct os/arch
-            for i in "${targets[@]}"; do
+            for i in "${!targets[@]}"; do
               os=$(echo "${targets[i]}" | cut -d "-" -f1)
               arch=$(echo "${targets[i]}" | cut -d "-" -f2)
               docker manifest annotate "${temp_tag}" "${manifests[i]}" --os "${os}" --arch "${arch}"
