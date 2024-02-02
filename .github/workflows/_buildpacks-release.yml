@@ -229,15 +229,14 @@ jobs:
         run: |
           temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
           perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
-          echo "TARGETS = ${TARGETS}"
           targets=$(echo "${TARGETS}" | jq -c -r 'join(" ")')
           echo "targets: ${targets[@]}"
           if [ -z "${targets}" ]; then
             # Build+push single-arch (linux/amd64) image to a temp tag
-            pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir}}/package.toml" -v
+            pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v
           else
             # Build a list of manifest images, one for each os/arch.
-            manifests=$(echo "${targets[@]}" | jq -c -r 'split(" ") | map("${temp_tag}_\(.)") | join(" ")')
+            manifests=$(echo "\"${targets[@]}\"" | jq -c -r 'split(" ") | map("${temp_tag}_\(.)") | join(" ")')
 
             # Build+push a buildpack image for each architecture to a temp tag
             for i in "${targets[@]}"; do
