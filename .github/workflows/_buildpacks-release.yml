@@ -210,9 +210,6 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.5.1
 
-      - name: Create Docker Image
-        run: pack buildpack package ${{ matrix.buildpack_id }} --config ${{ matrix.buildpack_output_dir }}/package.toml -v
-
       - name: Login to Docker Hub
         if: inputs.dry_run == false
         uses: docker/login-action@v3.0.0
@@ -225,11 +222,52 @@ jobs:
         id: check
         run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
-      - name: Tag and publish buildpack
-        if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
+      - name: Publish to Docker Hub
+        if: steps.check.outputs.published_to_docker == 'false'
         run: |
-          docker tag ${{ matrix.buildpack_id }} ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
-          docker push ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
+          temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
+          perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
+          artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
+          targets=$(echo "${{ matrix.buildpack }}" | jq -c -r '.targets | join(" ")')
+          if [ -z "${targets}" ]; then
+            # Build+push single-arch (linux/amd64) image to a temp tag
+            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+            pack buildpack package "${temp_tag}" --config "${output_dir}/package.toml" -v
+          else
+            # Build a list of manifest images, one for each os/arch.
+            manifests=$(echo "${targets[@]}" | jq -c -r 'split(" ") | map("${temp_tag}_\(.)") | join(" ")')
+
+            # Build+push a buildpack image for each architecture to a temp tag
+            for i in "${targets[@]}"; do
+              if [ "arm64-linux" = "${targets[i]}" ]; then
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
+              elif [ "amd64-linux" = "${targets[i]}" ]; then
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
+              fi
+              pack buildpack package "${manifests[i]}" --config "${output_dir}/package.toml" -v --publish
+            done
+
+            # create a manifest list / image index using platform-specific
+            # images created above.
+            docker manifest create "${temp_tag}" "${manifests[@]}"
+
+            # annotate each of the manifests with the correct os/arch
+            for i in "${targets[@]}"; do
+              os=$(echo "${targets[i]}" | cut -d "-" -f1)
+              arch=$(echo "${targets[i]}" | cut -d "-" -f2)
+              docker manifest annotate "${temp_tag}" "${manifests[i]}" --os "${os}" --arch "${arch}"
+            done
+
+            # Push the temporary tag manifest list / image index
+            docker push "${temp_tag}"
+          fi
+
+          # Promote the temp tag if this isn't a dry run
+          if [ "${{ inputs.dry_run }}" != "true" ]; do
+            docker tag "${temp_tag}" "${perm_tag}"
+            docker push "${perm_tag}"
+          fi
+
 
   publish-github:
     name: Publish → GitHub Release
