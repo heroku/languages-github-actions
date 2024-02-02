@@ -235,6 +235,11 @@ jobs:
           if [ -z "${targets}" ]; then
             # Build+push single-arch (linux/amd64) image to a temp tag
             pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v
+            # Promote the temp tag if this isn't a dry run
+            if [ "${{ inputs.dry_run }}" != "true" ]; do
+              docker tag "${temp_tag}" "${perm_tag}"
+              docker push "${perm_tag}"
+            fi
           else
             # Build a list of manifest images, one for each os/arch.
             manifests=($(echo "${TARGETS}" | jq -c -r "map(\"${temp_tag}_\(.)\") | join(\" \")"))
@@ -267,14 +272,14 @@ jobs:
               docker manifest annotate "${temp_tag}" "${manifests[i]}" --os "${os}" --arch "${arch}"
             done
 
-            # Push the temporary tag manifest list / image index
-            docker push "${temp_tag}"
-          fi
+            # Push the manifest list / image index to a disposable tag
+            docker manifest push "${temp_tag}"
 
-          # Promote the temp tag if this isn't a dry run
-          if [ "${{ inputs.dry_run }}" != "true" ]; do
-            docker tag "${temp_tag}" "${perm_tag}"
-            docker push "${perm_tag}"
+            # Push the manifest list to a stable tag if this isn't a dry run
+            if [ "${{ inputs.dry_run }}" != "true" ]; do
+              docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
+              docker manifest push "${perm_tag}"
+            fi
           fi
 
 
