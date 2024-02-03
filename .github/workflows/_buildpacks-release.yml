@@ -236,7 +236,7 @@ jobs:
             # Build+push single-arch (linux/amd64) image to a temp tag
             pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v
             # Promote the temp tag if this isn't a dry run
-            if [ "${{ inputs.dry_run }}" != "true" ]; do
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
               docker tag "${temp_tag}" "${perm_tag}"
               docker push "${perm_tag}"
             fi
@@ -276,7 +276,7 @@ jobs:
             docker manifest push "${temp_tag}"
 
             # Push the manifest list to a stable tag if this isn't a dry run
-            if [ "${{ inputs.dry_run }}" != "true" ]; do
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
               docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
               docker manifest push "${perm_tag}"
             fi
