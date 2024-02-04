@@ -175,7 +175,7 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@v5.5.1
+        uses: buildpacks/github-actions/setup-pack@v5.5.2
 
       - name: Create Docker Image
         run: pack buildpack package ${{ matrix.buildpack_id }} --config ${{ matrix.buildpack_output_dir }}/package.toml -v
@@ -213,7 +213,7 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@v5.5.1
+        uses: buildpacks/github-actions/setup-pack@v5.5.2
 
       - name: Generate CNB files
         run: |
@@ -256,7 +256,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@v5.5.1
+        uses: buildpacks/github-actions/setup-tools@v5.5.2
 
       - name: Check if version is already in the registry
         id: check
@@ -308,7 +308,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.app_token }}
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@v5.5.1
+        uses: buildpacks/github-actions/setup-tools@v5.5.2
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
