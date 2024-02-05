@@ -137,6 +137,9 @@ fn read_buildpack_targets(buildpack_dir: &Path) -> Vec<String> {
     let contents = std::fs::read_to_string(buildpack_dir.join("buildpack.toml")).unwrap();
     let document = Document::from_str(&contents).unwrap();
     document
+        .get("metadata")
+        .and_then(Item::as_table_like)
+        .unwrap_or(&toml_edit::Table::default())
         .get("targets")
         .and_then(Item::as_array_of_tables)
         .unwrap_or(&ArrayOfTables::default())
