@@ -86,21 +86,20 @@ jobs:
 
       - name: Install cross-compile tooling
         run: |
-          targets='${{ steps.generate-buildpack-matrix.outputs.targets }}'
-          if [ "[]" = "${targets}" ]; then
-            sudo apt-get install musl-tools --no-install-recommends
-            rustup target add x86_64-unknown-linux-musl
-          else
-            echo "${targets}" | jq -c -r '.[]' | while read target; do
-              if [ "linux/arm64" = "${target}" ]; then
-                sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
-                rustup target add aarch64-unknown-linux-musl
-              elif [ "linux/amd64" = "${target}" ]; then
-                sudo apt-get install musl-tools --no-install-recommends
-                rustup target add x86_64-unknown-linux-musl
-              fi
-            done
-          fi
+          target_list=$(jq -c -r 'join(" ")' <<< "${{ steps.generate-buildpack-matrix.outputs.targets }}")
+          read -a targets <<< "${target_list:-linux/amd64}"
+          for target in "${targets[@]}"; do
+            if [ "linux/arm64" = "${target}" ]; then
+              sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
+              rustup target add aarch64-unknown-linux-musl
+            elif [ "linux/amd64" = "${target}" ]; then
+              sudo apt-get install musl-tools --no-install-recommends
+              rustup target add x86_64-unknown-linux-musl
+            else
+              echo "ERROR: Unknown target: $target. Cross-compile dependencies can't be resolved."
+              exit 1
+            fi
+          done
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.1
