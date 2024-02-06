@@ -242,7 +242,7 @@ jobs:
             fi
           else
             # Build a list of manifest images, one for each os/arch.
-            manifests=($(echo "${TARGETS}" | jq -c -r "map(\"${temp_tag}_\(.)\") | join(\" \")"))
+            manifests=($(echo "${TARGETS}" | jq -c -r "map(\"${temp_tag}_\(sub(\"/\";\"-\"))\") | join(\" \")"))
             echo "manifests: ${manifests[@]}"
 
             # Build+push a buildpack image for each architecture to a temp tag
