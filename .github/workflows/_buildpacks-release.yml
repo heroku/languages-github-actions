@@ -86,7 +86,7 @@ jobs:
 
       - name: Install cross-compile tooling
         run: |
-          target_list=$(jq -c -r 'join(" ")' <<< "${{ steps.generate-buildpack-matrix.outputs.targets }}")
+          target_list=$(jq -c -r 'join(" ")' <<< '${{ steps.generate-buildpack-matrix.outputs.targets }}')
           read -a targets <<< "${target_list:-linux/amd64}"
           for target in "${targets[@]}"; do
             if [ "linux/arm64" = "${target}" ]; then
@@ -96,8 +96,7 @@ jobs:
               sudo apt-get install musl-tools --no-install-recommends
               rustup target add x86_64-unknown-linux-musl
             else
-              echo "ERROR: Unknown target: $target. Cross-compile dependencies can't be resolved."
-              exit 1
+              echo "WARNING: Unknown target: $target. Cross-compile dependencies can't be installed."
             fi
           done
 
