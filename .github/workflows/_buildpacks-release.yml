@@ -235,11 +235,13 @@ jobs:
         run: |
           temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
           perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
-          targets=($(echo "${TARGETS}" | jq -c -r 'join(" ")'))
+          target_list=$(echo "${TARGETS}" | jq -c -r 'join(" ")')
+          # When buildpack targets are unspecified, assume single linux/amd64 target.
+          read -a targets <<< "${target_list:-linux/amd64}"
           echo "targets: ${targets[@]}"
-          if [ -z "${targets}" ]; then
-            # Build+push single-arch (linux/amd64) image to a temp tag
-            pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v
+          if [ ${#targets[@]} -eq 1 ]; then
+            # Build+push single-arch image to a temp tag
+            pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v --publish
             # Promote the temp tag if this isn't a dry run
             if [ "${{ inputs.dry_run }}" != "true" ]; then
               docker tag "${temp_tag}" "${perm_tag}"
@@ -260,8 +262,6 @@ jobs:
               elif [ "linux/amd64" = "${targets[i]}" ]; then
                 output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
               fi
-
-              echo "output_dir: ${output_dir}"
 
               pack buildpack package "${manifests[i]}" --config "${output_dir}/package.toml" -v --publish
             done
