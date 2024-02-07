@@ -311,11 +311,14 @@ jobs:
               echo "${targets}" | jq -c -r '.[]' | while read target; do
                 if [ "linux/arm64" = "${target}" ]; then
                   output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
-                  pack buildpack package "${artifact_prefix}_${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
                 elif [ "linux/amd64" = "${target}" ]; then
                   output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
-                  pack buildpack package "${artifact_prefix}_${target}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+                else
+                  echo "ERROR: Unknown target: ${target}. Can't package buildpack."
+                  exit 1
                 fi
+                cnb_path="${artifact_prefix}_$(echo "$target" | tr "/" "-").cnb"
+                pack buildpack package "$cnb_path" --config "${output_dir}/package.toml" --format file --verbose
               done
             fi
           done
