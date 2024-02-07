@@ -88,6 +88,7 @@ jobs:
         env:
           TARGETS: ${{ steps.generate-buildpack-matrix.outputs.targets }}
         run: |
+          # When buildpack targets unspecified, assume single linux/amd64 target.
           target_list=$(echo "$TARGETS" | jq -c -r 'join(" ")')
           read -a targets <<< "${target_list:-linux/amd64}"
           for target in "${targets[@]}"; do
@@ -119,19 +120,20 @@ jobs:
       - name: Package buildpacks
         id: libcnb-package
         env:
-          BUILDPACKS: ${{ steps.generate-buildpack-matrix.outputs.targets }}
+          BUILDPACKS: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
         run: |
           package_dir=$(realpath "${{ env.PACKAGE_DIR }}")
           echo "$BUILDPACKS" | jq -c '.[]' | while read buildpack; do
             buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
-            cd "${buildpack_dir}"
             if [ -f "${buildpack_dir}/bin/build" ] && [ -f "${buildpack_dir}/bin/detect" ]; then
               echo "Skipping ${buildpack_dir}"
               continue
             fi
+            cd "${buildpack_dir}"
             target_list=$(echo "${buildpack}" | jq -c -r '.targets | join(" ")')
+            # When buildpack targets are unspecified, assume single linux/amd64 target.
             read -a targets <<< "${target_list:-linux/amd64}"
-            for target in targets; do
+            for target in "${targets[@]}"; do
                 if [ "linux/amd64" = "${target}" ]; then
                   rust_target="x86_64-unknown-linux-musl"
                 elif [ "linux/arm64" = "${target}" ]; then
