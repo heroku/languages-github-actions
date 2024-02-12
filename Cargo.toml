@@ -25,7 +25,7 @@ pedantic = "warn"
 unwrap_used = "warn"
 
 [dependencies]
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["now", "std"] }
 clap = { version = "4", default-features = false, features = [
     "derive",
     "error-context",
@@ -40,7 +40,7 @@ libcnb-common = "=0.17.0"
 libcnb-data = "=0.17.0"
 libcnb-package = "=0.17.0"
 markdown = "1.0.0-alpha.16"
-rand = "0.8"
+fastrand = "2"
 regex = "1"
 semver = "1"
 serde_json = "1"
