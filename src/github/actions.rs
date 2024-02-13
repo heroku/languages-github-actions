@@ -1,7 +1,6 @@
-use rand::distributions::{Alphanumeric, DistString};
 use std::fs::OpenOptions;
-use std::io;
 use std::io::{stdout, Write};
+use std::{io, iter};
 
 pub(crate) fn set_output<N: Into<String>, V: Into<String>>(
     name: N,
@@ -11,7 +10,7 @@ pub(crate) fn set_output<N: Into<String>, V: Into<String>>(
     let value = value.into();
 
     let line = if value.contains('\n') {
-        let delimiter = Alphanumeric.sample_string(&mut rand::thread_rng(), 20);
+        let delimiter: String = iter::repeat_with(fastrand::alphanumeric).take(20).collect();
         format!("{name}<<{delimiter}\n{value}\n{delimiter}")
     } else {
         format!("{name}={value}")
