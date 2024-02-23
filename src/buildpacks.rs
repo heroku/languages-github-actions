@@ -87,6 +87,10 @@ api = "0.9"
 id = "foo/bar"
 version = "0.0.1"
 
+[[targets]]
+os = "linux"
+arch = "amd64"
+
 [[stacks]]
 id = "*"
 
@@ -109,9 +113,6 @@ api = "0.9"
 [buildpack]
 id = "foo/bar"
 version = "0.0.1"
-
-[[stacks]]
-id = "*"
 "#;
 
         let buildpack_descriptor = toml::from_str::<BuildpackDescriptor>(data).unwrap();
