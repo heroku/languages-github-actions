@@ -9,7 +9,7 @@ use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use toml_edit::{value, ArrayOfTables, Document, Item};
+use toml_edit::{value, ArrayOfTables, DocumentMut, Item};
 use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -27,7 +27,7 @@ pub(crate) struct UpdateBuilderArgs {
 
 struct BuilderFile {
     path: PathBuf,
-    document: Document,
+    document: DocumentMut,
 }
 
 pub(crate) fn execute(args: UpdateBuilderArgs) -> Result<()> {
@@ -103,12 +103,12 @@ fn read_builder_file(path: PathBuf) -> Result<BuilderFile> {
     let contents =
         std::fs::read_to_string(&path).map_err(|e| Error::ReadingBuilder(path.clone(), e))?;
     let document =
-        Document::from_str(&contents).map_err(|e| Error::ParsingBuilder(path.clone(), e))?;
+        DocumentMut::from_str(&contents).map_err(|e| Error::ParsingBuilder(path.clone(), e))?;
     Ok(BuilderFile { path, document })
 }
 
 fn update_builder_with_buildpack_info(
-    document: &mut Document,
+    document: &mut DocumentMut,
     buildpack_id: &BuildpackId,
     buildpack_version: &BuildpackVersion,
     buildpack_uri_with_sha: &str,
@@ -159,7 +159,7 @@ fn update_builder_with_buildpack_info(
     Ok(())
 }
 
-fn is_buildpack_using_cnb_shim(document: &Document, buildpack_id: &BuildpackId) -> bool {
+fn is_buildpack_using_cnb_shim(document: &DocumentMut, buildpack_id: &BuildpackId) -> bool {
     document
         .get("buildpacks")
         .and_then(Item::as_array_of_tables)
@@ -194,7 +194,7 @@ mod test {
     use libcnb_data::buildpack::BuildpackVersion;
     use libcnb_data::buildpack_id;
     use std::str::FromStr;
-    use toml_edit::Document;
+    use toml_edit::DocumentMut;
 
     #[test]
     fn test_update_builder_contents_with_buildpack() {
@@ -222,7 +222,7 @@ mod test {
     version = "2.0.0"
     optional = true
 "#;
-        let mut document = Document::from_str(toml).unwrap();
+        let mut document = DocumentMut::from_str(toml).unwrap();
 
         update_builder_with_buildpack_info(
             &mut document,
@@ -281,7 +281,7 @@ mod test {
     id = "heroku/scala"
     version = "0.0.0"
 "#;
-        let mut document = Document::from_str(toml).unwrap();
+        let mut document = DocumentMut::from_str(toml).unwrap();
 
         update_builder_with_buildpack_info(
             &mut document,

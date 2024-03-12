@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use toml_edit::{value, ArrayOfTables, Document, Table};
+use toml_edit::{value, ArrayOfTables, DocumentMut, Table};
 use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -36,7 +36,7 @@ pub(crate) enum BumpCoordinate {
 
 struct BuildpackFile {
     path: PathBuf,
-    document: Document,
+    document: DocumentMut,
 }
 
 struct ChangelogFile {
@@ -141,7 +141,7 @@ fn read_buildpack_file(path: PathBuf) -> Result<BuildpackFile> {
     let contents =
         std::fs::read_to_string(&path).map_err(|e| Error::ReadingBuildpack(path.clone(), e))?;
     let document =
-        Document::from_str(&contents).map_err(|e| Error::ParsingBuildpack(path.clone(), e))?;
+        DocumentMut::from_str(&contents).map_err(|e| Error::ParsingBuildpack(path.clone(), e))?;
     Ok(BuildpackFile { path, document })
 }
 
@@ -400,7 +400,7 @@ mod test {
     use std::collections::{HashMap, HashSet};
     use std::path::PathBuf;
     use std::str::FromStr;
-    use toml_edit::Document;
+    use toml_edit::DocumentMut;
 
     #[test]
     fn test_get_fixed_version() {
@@ -848,7 +848,7 @@ optional = true
     fn create_buildpack_file_with_name(name: &str, contents: &str) -> BuildpackFile {
         BuildpackFile {
             path: PathBuf::from(name),
-            document: Document::from_str(contents).unwrap(),
+            document: DocumentMut::from_str(contents).unwrap(),
         }
     }
 }
