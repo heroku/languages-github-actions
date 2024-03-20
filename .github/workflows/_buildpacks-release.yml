@@ -60,7 +60,7 @@ env:
 jobs:
   compile:
     name: Compile Buildpacks
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     outputs:
       buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
       version: ${{ steps.generate-buildpack-matrix.outputs.version }}
@@ -71,14 +71,37 @@ jobs:
         with:
           submodules: true
 
-      - name: Install musl-tools
-        run: sudo apt-get install musl-tools --no-install-recommends
+      - name: Install Languages CLI
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        with:
+          branch: ${{ inputs.languages_cli_branch }}
+          update_rust_toolchain: false
+
+      - name: Generate buildpack matrix
+        id: generate-buildpack-matrix
+        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
 
       - name: Update Rust toolchain
         run: rustup update
 
-      - name: Install Rust linux-musl target
-        run: rustup target add x86_64-unknown-linux-musl
+      - name: Install cross-compile tooling
+        env:
+          TARGETS: ${{ steps.generate-buildpack-matrix.outputs.targets }}
+        run: |
+          # When buildpack targets unspecified, assume single linux/amd64 target.
+          target_list=$(echo "$TARGETS" | jq -c -r 'join(" ")')
+          read -a targets <<< "${target_list:-linux/amd64}"
+          for target in "${targets[@]}"; do
+            if [ "linux/arm64" = "${target}" ]; then
+              sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
+              rustup target add aarch64-unknown-linux-musl
+            elif [ "linux/amd64" = "${target}" ]; then
+              sudo apt-get install musl-tools --no-install-recommends
+              rustup target add x86_64-unknown-linux-musl
+            else
+              echo "WARNING: Unknown target: $target. Cross-compile dependencies can't be installed."
+            fi
+          done
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.3
@@ -94,19 +117,34 @@ jobs:
           )
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
 
-      - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
-        with:
-          branch: ${{ inputs.languages_cli_branch }}
-          update_rust_toolchain: false
-
       - name: Package buildpacks
         id: libcnb-package
-        run: cargo libcnb package --release --package-dir ${{ env.PACKAGE_DIR }}
-
-      - name: Generate buildpack matrix
-        id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
+        env:
+          BUILDPACKS: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
+        run: |
+          package_dir=$(realpath "${{ env.PACKAGE_DIR }}")
+          echo "$BUILDPACKS" | jq -c '.[]' | while read buildpack; do
+            buildpack_dir=$(echo "${buildpack}" | jq -c -r '.buildpack_dir')
+            if [ -f "${buildpack_dir}/bin/build" ] && [ -f "${buildpack_dir}/bin/detect" ]; then
+              echo "Skipping ${buildpack_dir}"
+              continue
+            fi
+            cd "${buildpack_dir}"
+            target_list=$(echo "${buildpack}" | jq -c -r '.targets | join(" ")')
+            # When buildpack targets are unspecified, assume single linux/amd64 target.
+            read -a targets <<< "${target_list:-linux/amd64}"
+            for target in "${targets[@]}"; do
+                if [ "linux/amd64" = "${target}" ]; then
+                  rust_target="x86_64-unknown-linux-musl"
+                elif [ "linux/arm64" = "${target}" ]; then
+                  rust_target="aarch64-unknown-linux-musl"
+                else
+                  echo "ERROR: Unknown target: ${target}. Can't package buildpack."
+                  exit 1
+                fi
+                cargo libcnb package --release --package-dir "${package_dir}" --target "$rust_target"
+            done
+          done
 
       - name: Generate changelog
         id: generate-changelog
@@ -177,26 +215,78 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.5.4
 
-      - name: Create Docker Image
-        run: pack buildpack package ${{ matrix.buildpack_id }} --config ${{ matrix.buildpack_output_dir }}/package.toml -v
+      - name: Check if version is already on Docker Hub
+        id: check
+        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - name: Login to Docker Hub
-        if: inputs.dry_run == false
         uses: docker/login-action@v3.0.0
+        if: steps.check.outputs.published_to_docker == 'false'
         with:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
 
-      - name: Check if version is already on Docker Hub
-        id: check
-        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
-      - name: Tag and publish buildpack
-        if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
+      - name: Publish to Docker Hub
+        if: steps.check.outputs.published_to_docker == 'false'
+        env:
+          TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
-          docker tag ${{ matrix.buildpack_id }} ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
-          docker push ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}
+          temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
+          perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
+          target_list=$(echo "${TARGETS}" | jq -c -r 'join(" ")')
+          # When buildpack targets are unspecified, assume single linux/amd64 target.
+          read -a targets <<< "${target_list:-linux/amd64}"
+          echo "targets: ${targets[@]}"
+          if [ ${#targets[@]} -eq 1 ]; then
+            # Build+push single-arch image to a temp tag
+            pack buildpack package "${temp_tag}" --config "${{ matrix.buildpack_output_dir }}/package.toml" -v --publish
+            # Promote the temp tag if this isn't a dry run
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
+              docker tag "${temp_tag}" "${perm_tag}"
+              docker push "${perm_tag}"
+            fi
+          else
+            # Build a list of manifest images, one for each os/arch.
+            manifests=($(echo "${TARGETS}" | jq -c -r "map(\"${temp_tag}_\(sub(\"/\";\"-\"))\") | join(\" \")"))
+            echo "manifests: ${manifests[@]}"
+
+            # Build+push a buildpack image for each architecture to a temp tag
+            for i in "${!targets[@]}"; do
+              echo "target: ${targets[i]}"
+              echo "manifest: ${manifests[i]}"
+
+              if [ "linux/arm64" = "${targets[i]}" ]; then
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
+              elif [ "linux/amd64" = "${targets[i]}" ]; then
+                output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${{ matrix.buildpack_artifact_prefix }}"
+              fi
+
+              pack buildpack package "${manifests[i]}" --config "${output_dir}/package.toml" -v --publish
+            done
+
+            # create a manifest list / image index using platform-specific
+            # images created above.
+            docker manifest create "${temp_tag}" "${manifests[@]}"
+
+            # annotate each of the manifests with the correct os/arch
+            for i in "${!targets[@]}"; do
+              os=$(echo "${targets[i]}" | cut -d "/" -f1)
+              arch=$(echo "${targets[i]}" | cut -d "/" -f2)
+              docker manifest annotate "${temp_tag}" "${manifests[i]}" --os "${os}" --arch "${arch}"
+            done
+
+            # Push the manifest list / image index to a disposable tag
+            docker manifest push "${temp_tag}"
+
+            # Push the manifest list to a stable tag if this isn't a dry run
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
+              docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
+              docker manifest push "${perm_tag}"
+            fi
+          fi
+
 
   publish-github:
     name: Publish → GitHub Release
@@ -218,9 +308,26 @@ jobs:
       - name: Generate CNB files
         run: |
           for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
+            targets=$(echo "${buildpack}" | jq -c -r '.targets')
             artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
-            output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
-            pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+
+            if [ "[]" = "${targets}" ]; then
+              output_dir=$(jq --exit-status -r '.buildpack_output_dir' <<< "${buildpack}")
+              pack buildpack package "${artifact_prefix}.cnb" --config "${output_dir}/package.toml" --format file --verbose
+            else
+              echo "${targets}" | jq -c -r '.[]' | while read target; do
+                if [ "linux/arm64" = "${target}" ]; then
+                  output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/aarch64-unknown-linux-musl/release/${artifact_prefix}"
+                elif [ "linux/amd64" = "${target}" ]; then
+                  output_dir="$(realpath "${{ env.PACKAGE_DIR }}")/x86_64-unknown-linux-musl/release/${artifact_prefix}"
+                else
+                  echo "ERROR: Unknown target: ${target}. Can't package buildpack."
+                  exit 1
+                fi
+                cnb_path="${artifact_prefix}_$(echo "$target" | tr "/" "-").cnb"
+                pack buildpack package "$cnb_path" --config "${output_dir}/package.toml" --format file --verbose
+              done
+            fi
           done
 
       - name: Get token for GitHub application (Linguist)
