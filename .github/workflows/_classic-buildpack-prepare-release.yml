@@ -99,6 +99,9 @@ jobs:
           delete-branch: true
           committer: ${{ vars.LINGUIST_GH_APP_USERNAME }} <${{ vars.LINGUIST_GH_APP_EMAIL }}>
           author: ${{ vars.LINGUIST_GH_APP_USERNAME }} <${{ vars.LINGUIST_GH_APP_EMAIL }}>
+      - name: PR link for GitHub summary
+        if: ${{ steps.pr.outputs.pull-request-number }}
+        run: echo '## PR [${{ steps.pr.outputs.pull-request-number }}](${{ steps.pr.outputs.pull-request-url }}) ${{ steps.pr.outputs.pull-request-operation }}' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enable pull request auto-merge
         if: steps.pr.outputs.pull-request-operation == 'created'
