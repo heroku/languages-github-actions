@@ -5,7 +5,7 @@ use crate::commands::generate_buildpack_matrix::errors::Error;
 use crate::commands::resolve_path;
 use crate::github::actions;
 use clap::Parser;
-use libcnb_data::buildpack::{BuildpackDescriptor, Target};
+use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackId, Target};
 use libcnb_package::output::{
     create_packaged_buildpack_dir_resolver, default_buildpack_directory_name,
 };
@@ -109,7 +109,7 @@ pub(crate) fn extract_buildpack_info(
         ),
         (
             "targets".to_string(),
-            extract_target_data(buildpack_descriptor, package_dir),
+            extract_target_data(buildpack_descriptor, buildpack_dir, package_dir),
         ),
     ]))
 }
@@ -118,6 +118,7 @@ pub(crate) fn extract_buildpack_info(
 // e.g. [ { "oci_platform": "linux/amd64", "rust_triple": "x86_64-unknown-linux-musl", "output_dir": "/somedir/x86_64-unknown-linux-musl/release/somebuildpack/" } ]
 fn extract_target_data(
     buildpack_descriptor: &BuildpackDescriptor,
+    buildpack_dir: &Path,
     package_dir: &Path,
 ) -> serde_json::Value {
     serde_json::Value::Array(
@@ -133,11 +134,12 @@ fn extract_target_data(
                     (
                         "output_dir".to_string(),
                         serde_json::Value::String(
-                            create_packaged_buildpack_dir_resolver(
+                            target_output_dir(
+                                &buildpack_descriptor.buildpack().id,
+                                buildpack_dir,
                                 package_dir,
-                                CargoProfile::Release,
                                 &triple,
-                            )(&buildpack_descriptor.buildpack().id)
+                            )
                             .to_string_lossy()
                             .to_string(),
                         ),
@@ -166,6 +168,30 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Tar
         });
     };
     targets
+}
+
+fn target_output_dir(
+    buildpack_id: &BuildpackId,
+    buildpack_dir: &Path,
+    package_dir: &Path,
+    triple: &str,
+) -> PathBuf {
+    if is_dynamic_buildpack(buildpack_dir) && !is_libcnb_buildpack(buildpack_dir) {
+        return buildpack_dir.into();
+    }
+    create_packaged_buildpack_dir_resolver(package_dir, CargoProfile::Release, triple)(buildpack_id)
+}
+
+fn is_libcnb_buildpack(buildpack_dir: &Path) -> bool {
+    ["buildpack.toml", "Cargo.toml"]
+        .iter()
+        .all(|file| buildpack_dir.join(file).exists())
+}
+
+fn is_dynamic_buildpack(buildpack_dir: &Path) -> bool {
+    ["detect", "build"]
+        .iter()
+        .all(|file| buildpack_dir.join("bin").join(file).exists())
 }
 
 fn oci_platform(target: &Target) -> String {
