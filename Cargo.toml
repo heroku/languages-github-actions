@@ -47,6 +47,7 @@ serde_json = "1"
 thiserror = "1"
 toml_edit = "0.22"
 uriparse = "0.6"
+serde = { version = "1.0.198", features = ["derive"] }
 
 [dev-dependencies]
 toml = "0.8"
