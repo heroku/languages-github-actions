@@ -125,12 +125,13 @@ pub(crate) struct BuildpackInfo {
 
 #[derive(Serialize)]
 pub(crate) struct TargetInfo {
-    cnb_file: String,
-    oci_platform: String,
+    os: Option<String>,
+    arch: Option<String>,
     rust_triple: Option<String>,
-    output_dir: PathBuf,
+    cnb_file: String,
     permanent_tag: String,
     temporary_tag: String,
+    output_dir: PathBuf,
 }
 
 pub(crate) fn read_buildpack_info(
@@ -161,7 +162,8 @@ pub(crate) fn read_buildpack_info(
                         &buildpack_descriptor.buildpack().id,
                         target_suffix.as_deref(),
                     ),
-                    oci_platform: oci_platform(target),
+                    os: target.os.clone(),
+                    arch: target.arch.clone(),
                     output_dir: target_output_dir(
                         &buildpack_descriptor.buildpack().id,
                         buildpack_dir,
@@ -223,14 +225,6 @@ fn target_name(target: &BuildpackTarget) -> String {
         (Some(os), None) => os.to_string(),
         (None, Some(arch)) => format!("universal-{arch}"),
         (_, _) => "universal".to_string(),
-    }
-}
-
-fn oci_platform(target: &BuildpackTarget) -> String {
-    match (target.os.as_deref(), target.arch.as_deref()) {
-        (Some(os), Some(arch)) => format!("{os}/{arch}"),
-        (Some(os), None) => os.to_string(),
-        (_, _) => String::new(),
     }
 }
 

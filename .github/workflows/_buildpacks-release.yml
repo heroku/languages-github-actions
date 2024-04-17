@@ -93,8 +93,6 @@ jobs:
               sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
             elif [[ "$triple" == "x86_64-unknown-linux-musl" ]]; then
               sudo apt-get install musl-tools --no-install-recommends
-            else
-              echo "WARNING: Unknown triple: $triple. Cross-compile dependencies were skipped."
             fi
             rustup target add "$triple"
           done
@@ -196,11 +194,10 @@ jobs:
 
             # annotate each of the manifest list entries with the correct os/arch
             for i in "${!target_temp_tags[@]}"; do
-              platform=$(jq --exit-status -r ".[$i].oci_platform" <<< "${TARGETS}")
-              os=$(cut -d "/" -f1 <<< "${platform}")
-              arch=$(cut -d "/" -f2 <<< "${platform}")
-              echo "Annotating ${{ matrix.temporary_tag }} / ${temp_tag_names[i]} with ${os}/${arch}"
-              docker manifest annotate "${{ matrix.temporary_tag }}" "${temp_tag_names[i]}" --os "${os}" --arch "${arch}"
+              os=$(jq --exit-status -r ".[$i].os" <<< "${TARGETS}")
+              arch=$(jq --exit-status -r ".[$i].arch" <<< "${TARGETS}")
+              echo "Annotating ${{ matrix.temporary_tag }} / ${target_temp_tags[i]} with ${os}/${arch}"
+              docker manifest annotate "${{ matrix.temporary_tag }}" "${target_temp_tags[i]}" --os "${os}" --arch "${arch}"
             done
 
             # Push the manifest list / image index to a temporary tag
