@@ -204,12 +204,7 @@ jobs:
       - name: Install Crane
         uses: uses: imjasonh/setup-crane@v0.3
 
-      - name: Check if version is already on Docker Hub
-        id: check
-        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-
       - name: Login to Docker Hub
-        if: steps.check.outputs.published_to_docker == 'false'
         uses: docker/login-action@v3.1.0
         with:
           registry: docker.io
@@ -217,14 +212,12 @@ jobs:
           password: ${{ secrets.docker_hub_token }}
 
 
-      - name: Publish to Docker Hub
-        if: steps.check.outputs.published_to_docker == 'false'
+      - name: Publish to temporary tags
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
-          target_count=$(jq --exit-status -r length <<< "${TARGETS}")
-          if (( target_count > 1 )); then
-            target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
+          target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
+          if (( ${#target_temp_tags[@]} > 1 )); then
             # Package each target to a temp tag.
             for i in "${!target_temp_tags[@]}"; do
               output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${TARGETS}")
@@ -246,26 +239,27 @@ jobs:
 
             # Push the manifest list / image index to a disposable tag
             docker manifest push "${temp_tag}"
-
-            if [ "${{ inputs.dry_run }}" != "true" ]; then
-              # promote temp manifest list to a stable tag
-              docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
-
-              # promote platform targeted images to stable tags
-              for i in "${!target_temp_tags[@]}"; do
-                perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
-                crane copy "${target_temp_tags[i]}" "${perm_tag}"
-              done
-            fi
           else
             output_dir=$(jq --exit-status -r '.[0].output_dir' <<< "${TARGETS}")
             # Build+push single-arch image to a temp tag
             pack buildpack package "${{ matrix.temporary_tag }}" --config "${output_dir}/package.toml" -v --publish
-            # Promote the temp tag if this isn't a dry run
-            if [ "${{ inputs.dry_run }}" != "true" ]; then
-              crane copy "${{ matrix.temporary_tag }}" "${{ matrix.permanent_tag }}"
-            fi
           fi
+
+      - name: Promote temporary tags to stable tags
+        if: inputs.dry_run == false
+        env:
+          TARGETS: ${{ toJSON(matrix.targets) }}
+        run: |
+          # If more than one target, promote target temp tags to stable tags
+          target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
+          if (( ${#target_temp_tags[@]} > 1 )); then
+            for i in "${!target_temp_tags[@]}"; do
+              perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
+              crane copy "${target_temp_tags[i]}" "${perm_tag}"
+            done
+          fi
+          # promote primary image manifest or manifest list to permanent tag
+          crane copy "{{ matrix.temporary_tag }}" "{{ matrix.permanent_tag }}"
 
       - name: Unpublish temp tags from this run
         if: always()
