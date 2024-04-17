@@ -201,6 +201,9 @@ jobs:
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@v5.6.0
 
+      - name: Install Crane
+        uses: uses: imjasonh/setup-crane@v0.3
+
       - name: Check if version is already on Docker Hub
         id: check
         run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
@@ -251,9 +254,7 @@ jobs:
               # promote platform targeted images to a stable tag
               for i in "${!target_temp_tags[@]}"; do
                 perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
-                docker pull "${target_temp_tags[i]}"
-                docker tag "${target_temp_tags[i]}" "${perm_tag}"
-                docker push "${perm_tag}"
+                crane copy "${target_temp_tags[i]}" "${perm_tag}"
               done
             fi
           else
@@ -262,40 +263,25 @@ jobs:
             pack buildpack package "${{ matrix.temporary_tag }}" --config "${output_dir}/package.toml" -v --publish
             # Promote the temp tag if this isn't a dry run
             if [ "${{ inputs.dry_run }}" != "true" ]; then
-              docker pull "${{ matrix.temporary_tag }}"
-              docker tag "${{ matrix.temporary_tag }}" "${{ matrix.permanent_tag }}"
-              docker push "${{ matrix.permanent_tag }}"
+              crane copy "${{ matrix.temporary_tag }}" "${{ matrix.permanent_tag }}"
             fi
           fi
 
       - name: Unpublish temp tags from this run
         if: always()
         env:
-          TARGETS: ${{ toJSON(matrix.targets) }}
+          TEMP_TAGS: ${{ toJSON(matrix.temp_tags) }}
         run: |
-          dockerhub_token=$(curl -sS -f --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -H "Content-Type: application/json" -X POST -d "{\"username\": \"${{ secrets.docker_hub_user }}\", \"password\": \"${{ secrets.docker_hub_token }}\"}" https://hub.docker.com/v2/users/login/ | jq --exit-status -r .token)
-          namespace=$(cut -d "/" -f2 <<< "${{ matrix.docker_repository }}")
-          repo=$(cut -d "/" -f3 <<< "${{ matrix.docker_repository }}")
-          temp_tag_base="_${{ github.run_id }}"
-          temp_tags=("${temp_tag_base}")
-          for platform in $(jq --exit-status -r 'map(.oci_platform) | .[]' <<< ${TARGETS}); do
-            temp_tags+=("${temp_tag_base}_${platform//\//-}")
-          done
           status=0
           for temp_tag in "${temp_tags[@]}"; do
-            echo "Deleting ${namespace}/${repo}:${temp_tag}"
-            response=$(curl -sS --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -X DELETE \
-              -H "Authorization: JWT ${dockerhub_token}" \
-              "https://hub.docker.com/v2/namespaces/${namespace}/repositories/${repo}/tags/${temp_tag}"
-            )
-
-            if [[ -z $response ]]; then
-              echo "Deleted."
-            elif [[ $response =~ "tag not found" ]]; then
-              echo "Tag does not exist."
+            echo "Checking $temp_tag for deletion"
+            if crane digest "$temp_tag"; then
+              echo "Deleting $temp_tag"
+              if ! crane delete "$temp_tag"; then
+                status=$?
+              fi
             else
-              echo "Couldn't delete. Response: ${response}"
-              status=22
+              echo "$temp_tag does not exist"
             fi
           done
           exit $status

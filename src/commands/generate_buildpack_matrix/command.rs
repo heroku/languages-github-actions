@@ -92,6 +92,22 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
     )
     .map_err(Error::SetActionOutput)?;
 
+    let temp_tags = buildpacks_info
+        .into_iter()
+        .flat_map(|bp| {
+            bp.targets
+                .into_iter()
+                .map(|t| t.permanent_tag)
+                .chain([bp.permanent_tag])
+        })
+        .collect::<HashSet<String>>();
+
+    actions::set_output(
+        "temp_tags",
+        serde_json::to_string(&temp_tags).map_err(Error::SerializingJson)?,
+    )
+    .map_err(Error::SetActionOutput)?;
+
     Ok(())
 }
 
