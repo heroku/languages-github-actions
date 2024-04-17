@@ -85,7 +85,7 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
     let rust_triples = buildpacks
         .iter()
         .flat_map(read_buildpack_targets)
-        .map(|t| rust_triple(&t))
+        .flat_map(|t| rust_triple(&t).ok())
         .collect::<HashSet<String>>();
 
     actions::set_output(
@@ -127,7 +127,7 @@ pub(crate) struct BuildpackInfo {
 pub(crate) struct TargetInfo {
     cnb_file: String,
     oci_platform: String,
-    rust_triple: String,
+    rust_triple: Option<String>,
     output_dir: PathBuf,
     permanent_tag: String,
     temporary_tag: String,
@@ -151,28 +151,35 @@ pub(crate) fn read_buildpack_info(
         targets: read_buildpack_targets(buildpack_descriptor)
             .iter()
             .map(|target| {
-                let triple = rust_triple(target);
-                let multi_target = if targets.len() > 1 {
-                    Some(target)
+                let target_suffix = if targets.len() > 1 {
+                    Some(target_name(target))
                 } else {
                     None
                 };
-                TargetInfo {
-                    cnb_file: cnb_file(&buildpack_descriptor.buildpack().id, multi_target),
+                Ok(TargetInfo {
+                    cnb_file: cnb_file(
+                        &buildpack_descriptor.buildpack().id,
+                        target_suffix.as_deref(),
+                    ),
                     oci_platform: oci_platform(target),
-                    output_dir: create_packaged_buildpack_dir_resolver(
+                    output_dir: target_output_dir(
+                        &buildpack_descriptor.buildpack().id,
+                        buildpack_dir,
                         package_dir,
-                        CargoProfile::Release,
-                        &triple,
-                    )(&buildpack_descriptor.buildpack().id),
-                    rust_triple: triple,
-                    permanent_tag: permanent_tag(&base_tag, &version, multi_target),
-                    temporary_tag: temporary_tag(&base_tag, temporary_id, multi_target),
-                }
+                        target,
+                    )?,
+                    rust_triple: rust_triple(target).ok(),
+                    permanent_tag: generate_tag(&base_tag, &version, target_suffix.as_deref()),
+                    temporary_tag: generate_tag(
+                        &base_tag,
+                        &format!("_{temporary_id}"),
+                        target_suffix.as_deref(),
+                    ),
+                })
             })
-            .collect(),
-        permanent_tag: permanent_tag(&base_tag, &version, None),
-        temporary_tag: temporary_tag(&base_tag, temporary_id, None),
+            .collect::<Result<Vec<_>>>()?,
+        permanent_tag: generate_tag(&base_tag, &version, None),
+        temporary_tag: generate_tag(&base_tag, &format!("_{temporary_id}"), None),
     })
 }
 
@@ -195,27 +202,19 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Bui
     targets
 }
 
-fn permanent_tag(base_tag: &str, version: &str, target: Option<&BuildpackTarget>) -> String {
-    generate_tag(base_tag, version, target)
+fn generate_tag(base: &str, tag: &str, target_suffix: Option<&str>) -> String {
+    target_suffix.map_or_else(
+        || format!("{base}:{tag}"),
+        |suffix| format!("{base}:{tag}_{suffix}"),
+    )
 }
 
-fn temporary_tag(base_tag: &str, temporary_id: &str, target: Option<&BuildpackTarget>) -> String {
-    generate_tag(base_tag, &format!("_{temporary_id}"), target)
-}
-
-fn generate_tag(base_tag: &str, suffix: &str, target: Option<&BuildpackTarget>) -> String {
-    if let Some(name) = target.map(target_name) {
-        return format!("{base_tag}:{suffix}_{name}");
-    }
-    format!("{base_tag}:{suffix}")
-}
-
-fn cnb_file(buildpack_id: &BuildpackId, target: Option<&BuildpackTarget>) -> String {
-    let dirname = default_buildpack_directory_name(buildpack_id);
-    if let Some(tgt) = target {
-        return format!("{}_{}.cnb", dirname, target_name(tgt));
-    }
-    format!("{dirname}.cnb")
+fn cnb_file(buildpack_id: &BuildpackId, target_suffix: Option<&str>) -> String {
+    let dir = default_buildpack_directory_name(buildpack_id);
+    target_suffix.map_or_else(
+        || format!("{dir}.cnb"),
+        |target| format!("{dir}_{target}.cnb"),
+    )
 }
 
 fn target_name(target: &BuildpackTarget) -> String {
@@ -234,10 +233,39 @@ fn oci_platform(target: &BuildpackTarget) -> String {
         (_, _) => String::new(),
     }
 }
-fn rust_triple(target: &BuildpackTarget) -> String {
+
+fn rust_triple(target: &BuildpackTarget) -> Result<String> {
     match (target.os.as_deref(), target.arch.as_deref()) {
-        (Some("linux"), Some("amd64")) => String::from("x86_64-unknown-linux-musl"),
-        (Some("linux"), Some("arm64")) => String::from("aarch64-unknown-linux-musl"),
-        (_, _) => String::from("unknown-triple"),
+        (Some("linux"), Some("amd64")) => Ok(String::from("x86_64-unknown-linux-musl")),
+        (Some("linux"), Some("arm64")) => Ok(String::from("aarch64-unknown-linux-musl")),
+        (_, _) => Err(Error::UnknownRustTarget(target.clone())),
     }
+}
+
+fn target_output_dir(
+    buildpack_id: &BuildpackId,
+    buildpack_dir: &Path,
+    package_dir: &Path,
+    target: &BuildpackTarget,
+) -> Result<PathBuf> {
+    if is_dynamic_buildpack(buildpack_dir) && !is_libcnb_buildpack(buildpack_dir) {
+        return Ok(buildpack_dir.into());
+    }
+    Ok(create_packaged_buildpack_dir_resolver(
+        package_dir,
+        CargoProfile::Release,
+        &rust_triple(target)?,
+    )(buildpack_id))
+}
+
+fn is_libcnb_buildpack(buildpack_dir: &Path) -> bool {
+    ["buildpack.toml", "Cargo.toml"]
+        .iter()
+        .all(|file| buildpack_dir.join(file).exists())
+}
+
+fn is_dynamic_buildpack(buildpack_dir: &Path) -> bool {
+    ["detect", "build"]
+        .iter()
+        .all(|file| buildpack_dir.join("bin").join(file).exists())
 }

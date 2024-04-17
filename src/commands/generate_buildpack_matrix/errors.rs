@@ -1,5 +1,6 @@
 use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorError};
 use crate::github::actions::SetActionOutputError;
+use libcnb_data::buildpack::BuildpackTarget;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -19,6 +20,8 @@ pub(crate) enum Error {
     FixedVersion(HashSet<String>),
     #[error(transparent)]
     SetActionOutput(SetActionOutputError),
+    #[error("Unknown target configuration. Couldn't determine a rust triple for {0:?}.")]
+    UnknownRustTarget(BuildpackTarget),
 }
 
 fn list_versions(versions: &HashSet<String>) -> String {
