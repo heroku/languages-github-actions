@@ -79,7 +79,7 @@ jobs:
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix --temporary_id "${{ github.run_id }}" --package-dir "${{ env.PACKAGE_DIR }}"
+        run: actions generate-buildpack-matrix --temporary-id "${{ github.run_id }}" --package-dir "${{ env.PACKAGE_DIR }}"
 
       - name: Update Rust toolchain
         run: rustup update
