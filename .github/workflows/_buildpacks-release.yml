@@ -201,7 +201,7 @@ jobs:
             done
 
             # Push the manifest list / image index to a temporary tag
-            docker manifest push "${temp_tag}"
+            docker manifest push "${{ matrix.temporary_tag }}"
           fi
 
       - name: Promote temporary tags to stable tags
@@ -229,6 +229,7 @@ jobs:
             if crane digest "$temp_tag"; then
               echo "Deleting $temp_tag"
               if ! crane delete "$temp_tag"; then
+                echo "Error deleting $temp_tag"
                 status=$?
               fi
             else
