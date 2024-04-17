@@ -219,51 +219,52 @@ jobs:
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
-          temp_tag="${{ matrix.docker_repository }}:_${{ github.run_id }}"
-          perm_tag="${{ matrix.docker_repository }}:${{ matrix.buildpack_version }}"
           target_count=$(jq --exit-status -r length <<< "${TARGETS}")
-          if (( target_count == 1 )); then
-            output_dir=$(jq --exit-status -r '.[0].output_dir' <<< "${TARGETS}")
-            # Build+push single-arch image to a temp tag
-            pack buildpack package "${temp_tag}" --config "${output_dir}/package.toml" -v --publish
-            # Promote the temp tag if this isn't a dry run
-            if [ "${{ inputs.dry_run }}" != "true" ]; then
-              docker tag "${temp_tag}" "${perm_tag}"
-              docker push "${perm_tag}"
-            fi
-          else
-            # Build a list of manifest image tags, one for each os/arch.
-            manifests=($(jq --exit-status -r "map(.oci_platform) | map(\"${temp_tag}_\(sub(\"/\";\"-\"))\") | join(\" \")" <<< "${TARGETS}"))
-            echo "manifests: ${manifests[@]}"
-
-            for i in "${!manifests[@]}"; do
+          if (( target_count > 1 )); then
+            target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
+            # Package each target to a temp tag.
+            for i in "${!target_temp_tags[@]}"; do
               output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${TARGETS}")
-              echo "Packaging ${output_dir} into manifest: ${manifests[i]}"
-              pack buildpack package "${manifests[i]}" --config "${output_dir}/package.toml" -v --publish
+              echo "Packaging ${output_dir} into ${target_temp_tags[i]}"
+              pack buildpack package "${target_temp_tags[i]}" --config "${output_dir}/package.toml" -v --publish
             done
 
             # create a manifest list using platform-specific images created above.
-            docker manifest create "${temp_tag}" "${manifests[@]}"
+            docker manifest create "${{ matrix.temporary_tag }}" "${target_temp_tags[@]}"
 
-            # annotate each of the manifests with the correct os/arch
-            for i in "${!manifests[@]}"; do
+            # annotate each of the manifest list entries with the correct os/arch
+            for i in "${!target_temp_tags[@]}"; do
               platform=$(jq --exit-status -r ".[$i].oci_platform" <<< "${TARGETS}")
               os=$(cut -d "/" -f1 <<< "${platform}")
               arch=$(cut -d "/" -f2 <<< "${platform}")
-              echo "Annotating ${temp_tag} / ${manifests[i]} with ${os}/${arch}"
-              docker manifest annotate "${temp_tag}" "${manifests[i]}" --os "${os}" --arch "${arch}"
+              echo "Annotating ${{ matrix.temporary_tag }} / ${temp_tag_names[i]} with ${os}/${arch}"
+              docker manifest annotate "${{ matrix.temporary_tag }}" "${temp_tag_names[i]}" --os "${os}" --arch "${arch}"
             done
 
             # Push the manifest list / image index to a disposable tag
             docker manifest push "${temp_tag}"
 
-            # If this isn't a dry run, promote temp tags to a stable tag
             if [ "${{ inputs.dry_run }}" != "true" ]; then
-              for platform in $(jq --exit-status -r "map(.oci_platform) | .[]" <<< "${TARGETS}"); do
-                docker tag "${temp_tag}_${platform//\//-}" "${perm_tag}_${platform//\//-}"
-                docker push "${perm_tag}_${platform//\//-}"
-              done
+              # promote temp manifest list to a stable tag
               docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
+
+              # promote platform targeted images to a stable tag
+              for i in "${!target_temp_tags[@]}"; do
+                perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
+                docker pull "${target_temp_tags[i]}"
+                docker tag "${target_temp_tags[i]}" "${perm_tag}"
+                docker push "${perm_tag}"
+              done
+            fi
+          else
+            output_dir=$(jq --exit-status -r '.[0].output_dir' <<< "${TARGETS}")
+            # Build+push single-arch image to a temp tag
+            pack buildpack package "${{ matrix.temporary_tag }}" --config "${output_dir}/package.toml" -v --publish
+            # Promote the temp tag if this isn't a dry run
+            if [ "${{ inputs.dry_run }}" != "true" ]; then
+              docker pull "${{ matrix.temporary_tag }}"
+              docker tag "${{ matrix.temporary_tag }}" "${{ matrix.permanent_tag }}"
+              docker push "${{ matrix.permanent_tag }}"
             fi
           fi
 
