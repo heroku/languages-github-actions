@@ -121,12 +121,15 @@ jobs:
           package_dir=$(realpath "${{ env.PACKAGE_DIR }}")
           for buildpack in $(jq --exit-status -c '.[]' <<< "${BUILDPACKS}"); do
             buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
-            if [ -f "${buildpack_dir}/bin/build" ] && [ -f "${buildpack_dir}/bin/detect" ]; then
-              echo "Skipping ${buildpack_dir}"
-              continue
-            fi
-            cd "${buildpack_dir}"
-            for triple in $(jq --exit-status -r '.targets | map(.rust_triple) | .[]' <<< "${buildpack}"); do
+            cd "$buildpack_dir"
+            for target in $(jq --exit-status -c '.targets | .[]' <<< "${buildpack}"); do
+              output_dir=$(jq --exit-status -r '.output_dir' <<< "${target}")
+              if [[ "$buildpack_dir" -ef "$output_dir" ]]; then
+                echo "Skipping packaging of ${output_dir}. Not a libcnb.rs buildpack."
+                continue
+              fi
+              echo "Packaging ${buildpack_dir}."
+              triple=$(jq --exit-status -r '.rust_triple' <<< "${target}")
               cargo libcnb package --release --package-dir "${package_dir}" --target "${triple}"
             done
           done
@@ -134,45 +137,6 @@ jobs:
       - name: Generate changelog
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
-
-      - name: Temporary fix for bash-based buildpacks
-        run: |
-          buildpacks='${{ steps.generate-buildpack-matrix.outputs.buildpacks }}'
-
-          bash_buildpack_source_dirs=()
-          bash_buildpack_output_dirs=()
-
-          # copy any bash-based buildpack to target buildpack dir because `cargo libcnb package` will ignore them
-          for buildpack in $(jq --exit-status -c '.[]' <<< "${buildpacks}"); do
-            buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
-            output_dir=$(jq --exit-status -r '.targets[0].output_dir' <<< "${buildpack}")
-            if [ ! -d "${output_dir}" ]; then
-              echo "bash-based buildpack detected at ${buildpack_dir}"
-              cp -R "${buildpack_dir}" "${output_dir}"
-              bash_buildpack_source_dirs+=("${buildpack_dir}")
-              bash_buildpack_output_dirs+=("${output_dir}")
-            fi
-          done
-
-          # replace dependencies that reference a bash-buildpack
-          for buildpack in $(jq --exit-status -c '.[]' <<< "${buildpacks}"); do
-            for output_dir in $(jq --exit-status -r '.targets | map(.output_dir) | .[]' <<< "${buildpack}"); do
-              echo "checking dependencies in ${output_dir}/package.toml"
-              for dep in $(yq -oy '.dependencies[].uri' "${output_dir}/package.toml"); do
-                if realpath "${dep}" &> /dev/null; then
-                  dep_path=$(realpath "${dep}")
-                  for i in "${!bash_buildpack_source_dirs[@]}"; do
-                    bash_buildpack_source_dir="${bash_buildpack_source_dirs[$i]}"
-                    bash_buildpack_output_dir="${bash_buildpack_output_dirs[$i]}"
-                    if [ "${bash_buildpack_source_dir}" = "${dep_path}" ]; then
-                      echo "replacing ${dep} with ${bash_buildpack_output_dir}"
-                      sed -i 's|'"$dep"'|'"$bash_buildpack_output_dir"'|g' "${output_dir}/package.toml"
-                    fi
-                  done
-                fi
-              done
-            done
-          done
 
       - name: Cache buildpacks
         uses: actions/cache/save@v4

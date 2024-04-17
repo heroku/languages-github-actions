@@ -209,11 +209,11 @@ fn generate_tag(base: &str, tag: &str, target_suffix: Option<&str>) -> String {
     )
 }
 
-fn cnb_file(buildpack_id: &BuildpackId, target_suffix: Option<&str>) -> String {
-    let dir = default_buildpack_directory_name(buildpack_id);
+fn cnb_file(buildpack_id: &BuildpackId, suffix: Option<&str>) -> String {
+    let name = default_buildpack_directory_name(buildpack_id);
     target_suffix.map_or_else(
-        || format!("{dir}.cnb"),
-        |target| format!("{dir}_{target}.cnb"),
+        || format!("{name}.cnb"),
+        |suffix| format!("{name}_{suffix}.cnb"),
     )
 }
 
