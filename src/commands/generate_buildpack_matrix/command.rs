@@ -85,7 +85,7 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
     let rust_triples = buildpacks
         .iter()
         .flat_map(read_buildpack_targets)
-        .flat_map(|t| rust_triple(&t).ok())
+        .filter_map(|t| rust_triple(&t).ok())
         .collect::<HashSet<String>>();
 
     actions::set_output(
@@ -202,8 +202,8 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Bui
     targets
 }
 
-fn generate_tag(base: &str, tag: &str, target_suffix: Option<&str>) -> String {
-    target_suffix.map_or_else(
+fn generate_tag(base: &str, tag: &str, suffix: Option<&str>) -> String {
+    suffix.map_or_else(
         || format!("{base}:{tag}"),
         |suffix| format!("{base}:{tag}_{suffix}"),
     )
@@ -211,7 +211,7 @@ fn generate_tag(base: &str, tag: &str, target_suffix: Option<&str>) -> String {
 
 fn cnb_file(buildpack_id: &BuildpackId, suffix: Option<&str>) -> String {
     let name = default_buildpack_directory_name(buildpack_id);
-    target_suffix.map_or_else(
+    suffix.map_or_else(
         || format!("{name}.cnb"),
         |suffix| format!("{name}_{suffix}.cnb"),
     )
