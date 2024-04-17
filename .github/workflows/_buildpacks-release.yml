@@ -79,7 +79,7 @@ jobs:
 
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
-        run: actions generate-buildpack-matrix --package-dir ${{ env.PACKAGE_DIR }}
+        run: actions generate-buildpack-matrix --temporary_id "${{ github.run_id }}" --package-dir "${{ env.PACKAGE_DIR }}"
 
       - name: Update Rust toolchain
         run: rustup update
@@ -251,7 +251,7 @@ jobs:
               # promote temp manifest list to a stable tag
               docker buildx imagetools create -t "${perm_tag}" "${temp_tag}"
 
-              # promote platform targeted images to a stable tag
+              # promote platform targeted images to stable tags
               for i in "${!target_temp_tags[@]}"; do
                 perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
                 crane copy "${target_temp_tags[i]}" "${perm_tag}"
