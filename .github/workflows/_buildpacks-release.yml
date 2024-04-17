@@ -217,14 +217,16 @@ jobs:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
           target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
-          if (( ${#target_temp_tags[@]} > 1 )); then
-            # Package each target to a temp tag.
-            for i in "${!target_temp_tags[@]}"; do
-              output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${TARGETS}")
-              echo "Packaging ${output_dir} into ${target_temp_tags[i]}"
-              pack buildpack package "${target_temp_tags[i]}" --config "${output_dir}/package.toml" -v --publish
-            done
+          # Publish each target to a temp tag
+          for i in "${!target_temp_tags[@]}"; do
+            output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${TARGETS}")
+            echo "Packaging ${output_dir} into ${target_temp_tags[i]}"
+            pack buildpack package "${target_temp_tags[i]}" --config "${output_dir}/package.toml" -v --publish
+          done
 
+          # If there is more than one target, publish a multi-platform
+          # manifest list / image index to a temp tag.
+          if (( ${#target_temp_tags[@]} > 1 )); then
             # create a manifest list using platform-specific images created above.
             docker manifest create "${{ matrix.temporary_tag }}" "${target_temp_tags[@]}"
 
@@ -237,12 +239,8 @@ jobs:
               docker manifest annotate "${{ matrix.temporary_tag }}" "${temp_tag_names[i]}" --os "${os}" --arch "${arch}"
             done
 
-            # Push the manifest list / image index to a disposable tag
+            # Push the manifest list / image index to a temporary tag
             docker manifest push "${temp_tag}"
-          else
-            output_dir=$(jq --exit-status -r '.[0].output_dir' <<< "${TARGETS}")
-            # Build+push single-arch image to a temp tag
-            pack buildpack package "${{ matrix.temporary_tag }}" --config "${output_dir}/package.toml" -v --publish
           fi
 
       - name: Promote temporary tags to stable tags
@@ -250,14 +248,12 @@ jobs:
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
-          # If more than one target, promote target temp tags to stable tags
+          # Promote target temp tags to stable tags
           target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
-          if (( ${#target_temp_tags[@]} > 1 )); then
-            for i in "${!target_temp_tags[@]}"; do
-              perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
-              crane copy "${target_temp_tags[i]}" "${perm_tag}"
-            done
-          fi
+          for i in "${!target_temp_tags[@]}"; do
+            perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
+            crane copy "${target_temp_tags[i]}" "${perm_tag}"
+          done
           # promote primary image manifest or manifest list to permanent tag
           crane copy "{{ matrix.temporary_tag }}" "{{ matrix.permanent_tag }}"
 
@@ -300,18 +296,9 @@ jobs:
       - name: Generate CNB files
         run: |
           for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
-            targets=$(jq --exit-status -c '.targets' <<< "${buildpack}")
-            target_count=$(jq --exit-status -r 'length' <<< "${targets}")
-            artifact_prefix=$(jq --exit-status -r '.buildpack_artifact_prefix' <<< "${buildpack}")
-
-            for ((i=0;i<target_count;i++)); do
-              output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${targets}")
-              if (( target_count == 1)); then
-                cnb_file="${artifact_prefix}.cnb"
-              else
-                platform=$(jq --exit-status -r ".[$i].oci_platform" <<< "${targets}")
-                cnb_file="${artifact_prefix}_${platform//\//-}.cnb"
-              fi
+            for target in $(jq --exit-status -c ".targets | .[]" <<< "${buildpack}"); do
+              output_dir=$(jq --exit-status -r ".output_dir" <<< "${target}")
+              cnb_file=$(jq --exit-status -r ".cnb_file" <<< "${target}")
               pack buildpack package "$cnb_file" --config "${output_dir}/package.toml" --format file --verbose
             done
           done

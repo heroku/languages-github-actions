@@ -5,8 +5,10 @@ use crate::commands::generate_buildpack_matrix::errors::Error;
 use crate::commands::resolve_path;
 use crate::github::actions;
 use clap::Parser;
-use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackTarget};
-use libcnb_package::output::create_packaged_buildpack_dir_resolver;
+use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackId, BuildpackTarget};
+use libcnb_package::output::{
+    create_packaged_buildpack_dir_resolver, default_buildpack_directory_name,
+};
 use libcnb_package::CargoProfile;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -123,8 +125,9 @@ pub(crate) struct BuildpackInfo {
 
 #[derive(Serialize)]
 pub(crate) struct TargetInfo {
-    rust_triple: String,
+    cnb_file: String,
     oci_platform: String,
+    rust_triple: String,
     output_dir: PathBuf,
     permanent_tag: String,
     temporary_tag: String,
@@ -140,6 +143,7 @@ pub(crate) fn read_buildpack_info(
     let base_tag = read_image_repository_metadata(buildpack_descriptor).ok_or(
         Error::MissingImageRepositoryMetadata(buildpack_dir.join("buildpack.toml")),
     )?;
+    let targets = read_buildpack_targets(buildpack_descriptor);
     Ok(BuildpackInfo {
         buildpack_id: buildpack_descriptor.buildpack().id.to_string(),
         buildpack_version: version.clone(),
@@ -148,7 +152,13 @@ pub(crate) fn read_buildpack_info(
             .iter()
             .map(|target| {
                 let triple = rust_triple(target);
+                let multi_target = if targets.len() > 1 {
+                    Some(target)
+                } else {
+                    None
+                };
                 TargetInfo {
+                    cnb_file: cnb_file(&buildpack_descriptor.buildpack().id, multi_target),
                     oci_platform: oci_platform(target),
                     output_dir: create_packaged_buildpack_dir_resolver(
                         package_dir,
@@ -156,8 +166,8 @@ pub(crate) fn read_buildpack_info(
                         &triple,
                     )(&buildpack_descriptor.buildpack().id),
                     rust_triple: triple,
-                    permanent_tag: permanent_tag(&base_tag, &version, Some(target)),
-                    temporary_tag: temporary_tag(&base_tag, temporary_id, Some(target)),
+                    permanent_tag: permanent_tag(&base_tag, &version, multi_target),
+                    temporary_tag: temporary_tag(&base_tag, temporary_id, multi_target),
                 }
             })
             .collect(),
@@ -198,6 +208,14 @@ fn generate_tag(base_tag: &str, suffix: &str, target: Option<&BuildpackTarget>) 
         return format!("{base_tag}:{suffix}_{name}");
     }
     format!("{base_tag}:{suffix}")
+}
+
+fn cnb_file(buildpack_id: &BuildpackId, target: Option<&BuildpackTarget>) -> String {
+    let dirname = default_buildpack_directory_name(buildpack_id);
+    if let Some(tgt) = target {
+        return format!("{}_{}.cnb", dirname, target_name(tgt));
+    }
+    format!("{dirname}.cnb")
 }
 
 fn target_name(target: &BuildpackTarget) -> String {
