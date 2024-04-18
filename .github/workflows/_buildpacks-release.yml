@@ -223,21 +223,27 @@ jobs:
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
+          dockerhub_token=$(curl -sS -f --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -H "Content-Type: application/json" -X POST -d "{\"username\": \"${{ secrets.docker_hub_user }}\", \"password\": \"${{ secrets.docker_hub_token }}\"}" https://hub.docker.com/v2/users/login/ | jq --exit-status -r .token)
+          namespace=$(cut -d "/" -f2 <<< "${{ matrix.image_repository }}")
+          repo=$(cut -d "/" -f3 <<< "${{ matrix.image_repository }}")
           status=0
           temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
           temp_tags+=("${{ matrix.temporary_tag }}")
           temp_tags=($(printf '%s\n' "${temp_tags[@]}" | sort -u))
-
           for temp_tag in "${temp_tags[@]}"; do
-            echo "Checking $temp_tag for deletion"
-            if crane digest "$temp_tag"; then
-              echo "Deleting $temp_tag"
-              if ! crane delete "$temp_tag"; then
-                echo "Error deleting $temp_tag"
-                status=$?
-              fi
+            echo "Deleting ${temp_tag}"
+            response=$(curl -sS --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -X DELETE \
+              -H "Authorization: JWT ${dockerhub_token}" \
+              "https://hub.docker.com/v2/namespaces/${namespace}/repositories/${repo}/tags/${temp_tag#*:}"
+            )
+
+            if [[ -z $response ]]; then
+              echo "Deleted."
+            elif [[ $response =~ "tag not found" ]]; then
+              echo "Tag does not exist."
             else
-              echo "$temp_tag does not exist"
+              echo "Couldn't delete. Response: ${response}"
+              status=22
             fi
           done
           exit $status
