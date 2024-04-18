@@ -316,7 +316,7 @@ jobs:
 
       - name: Calculate the buildpack image digest
         id: digest
-        run: echo "value=$(crane digest ${{ matrix.docker_repository }}:${{ matrix.buildpack_version }})" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(crane digest ${{ matrix.permanent_tag }})" >> "$GITHUB_OUTPUT"
 
       - name: Register the new version with the CNB Buildpack Registry
         if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'
@@ -325,7 +325,7 @@ jobs:
           token: ${{ secrets.cnb_registry_token }}
           id: ${{ matrix.buildpack_id }}
           version: ${{ matrix.buildpack_version }}
-          address: ${{ matrix.docker_repository }}@${{ steps.digest.outputs.value }}
+          address: ${{ matrix.image_repository }}@${{ steps.digest.outputs.value }}
 
   update-builder:
     name: Update Builder

@@ -103,6 +103,7 @@ pub(crate) struct BuildpackInfo {
     buildpack_version: String,
     buildpack_dir: PathBuf,
     targets: Vec<TargetInfo>,
+    image_repository: String,
     permanent_tag: String,
     temporary_tag: String,
 }
@@ -125,7 +126,7 @@ pub(crate) fn read_buildpack_info(
     temporary_id: &str,
 ) -> Result<BuildpackInfo> {
     let version = buildpack_descriptor.buildpack().version.to_string();
-    let base_tag = read_image_repository_metadata(buildpack_descriptor).ok_or(
+    let image_repository = read_image_repository_metadata(buildpack_descriptor).ok_or(
         Error::MissingImageRepositoryMetadata(buildpack_dir.join("buildpack.toml")),
     )?;
     let targets = read_buildpack_targets(buildpack_descriptor);
@@ -136,16 +137,13 @@ pub(crate) fn read_buildpack_info(
         targets: read_buildpack_targets(buildpack_descriptor)
             .iter()
             .map(|target| {
-                let target_suffix = if targets.len() > 1 {
+                let suffix = if targets.len() > 1 {
                     Some(target_name(target))
                 } else {
                     None
                 };
                 Ok(TargetInfo {
-                    cnb_file: cnb_file(
-                        &buildpack_descriptor.buildpack().id,
-                        target_suffix.as_deref(),
-                    ),
+                    cnb_file: cnb_file(&buildpack_descriptor.buildpack().id, suffix.as_deref()),
                     os: target.os.clone(),
                     arch: target.arch.clone(),
                     output_dir: target_output_dir(
@@ -155,17 +153,18 @@ pub(crate) fn read_buildpack_info(
                         target,
                     )?,
                     rust_triple: rust_triple(target).ok(),
-                    permanent_tag: generate_tag(&base_tag, &version, target_suffix.as_deref()),
+                    permanent_tag: generate_tag(&image_repository, &version, suffix.as_deref()),
                     temporary_tag: generate_tag(
-                        &base_tag,
+                        &image_repository,
                         &format!("_{temporary_id}"),
-                        target_suffix.as_deref(),
+                        suffix.as_deref(),
                     ),
                 })
             })
             .collect::<Result<Vec<_>>>()?,
-        permanent_tag: generate_tag(&base_tag, &version, None),
-        temporary_tag: generate_tag(&base_tag, &format!("_{temporary_id}"), None),
+        permanent_tag: generate_tag(&image_repository, &version, None),
+        temporary_tag: generate_tag(&image_repository, &format!("_{temporary_id}"), None),
+        image_repository,
     })
 }
 
@@ -188,10 +187,10 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Bui
     targets
 }
 
-fn generate_tag(base: &str, tag: &str, suffix: Option<&str>) -> String {
+fn generate_tag(repo: &str, tag: &str, suffix: Option<&str>) -> String {
     suffix.map_or_else(
-        || format!("{base}:{tag}"),
-        |suffix| format!("{base}:{tag}_{suffix}"),
+        || format!("{repo}:{tag}"),
+        |suffix| format!("{repo}:{tag}_{suffix}"),
     )
 }
 
