@@ -202,6 +202,7 @@ fn cnb_file(buildpack_id: &BuildpackId, suffix: Option<&str>) -> String {
     )
 }
 
+// Returns the target naming suffix for image tags and .cnb files.
 fn target_name(target: &BuildpackTarget) -> String {
     match (target.os.as_deref(), target.arch.as_deref()) {
         (Some(os), Some(arch)) => format!("{os}-{arch}"),
@@ -219,6 +220,11 @@ fn rust_triple(target: &BuildpackTarget) -> Result<String> {
     }
 }
 
+// Returns the expected output directory for a target. For libcnb.rs buildpacks,
+// it should return the libcnb.rs packaged directory for the target
+// (e.g.: packaged/x86_64-unknown-linux-musl/release/heroku_procfile),
+// while bash buildpacks should return the buildpack directory itself, since
+// no compilation is required.
 fn target_output_dir(
     buildpack_id: &BuildpackId,
     buildpack_dir: &Path,
@@ -245,4 +251,98 @@ fn is_dynamic_buildpack(buildpack_dir: &Path) -> bool {
     ["detect", "build"]
         .iter()
         .all(|file| buildpack_dir.join("bin").join(file).exists())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_buildpack_info;
+    use libcnb_data::buildpack::BuildpackDescriptor;
+    use std::path::PathBuf;
+
+    #[test]
+    fn read_multitarget_buildpack() {
+        let bp_descriptor: BuildpackDescriptor = toml::from_str(
+            r#"
+                api = "0.10"
+                [buildpack]
+                id = "heroku/fakeymcfakeface"
+                version = "1.2.3"
+                [[targets]]
+                os="linux"
+                arch="amd64"
+                [[targets]]
+                os="linux"
+                arch="arm64"
+                [metadata.release]
+                image = { repository = "docker.io/heroku/buildpack-fakey" }
+            "#,
+        )
+        .expect("expected buildpack descriptor to parse");
+        let bp_dir = PathBuf::from("./fake-buildpack");
+        let package_dir = PathBuf::from("./packaged-fake");
+
+        let bp_info = read_buildpack_info(&bp_descriptor, &bp_dir, &package_dir, "918273")
+            .expect("Expected to read buildpack info");
+        assert_eq!(bp_info.buildpack_id, "heroku/fakeymcfakeface");
+        assert_eq!(
+            bp_info.temporary_tag,
+            "docker.io/heroku/buildpack-fakey:_918273"
+        );
+        assert_eq!(bp_info.targets[0].os, Some("linux".to_string()));
+        assert_eq!(bp_info.targets[1].arch, Some("arm64".to_string()));
+        assert_eq!(
+            bp_info.targets[0].rust_triple,
+            Some("x86_64-unknown-linux-musl".to_string())
+        );
+        assert_eq!(
+            bp_info.targets[1].rust_triple,
+            Some("aarch64-unknown-linux-musl".to_string())
+        );
+        assert_eq!(
+            bp_info.targets[0].temporary_tag,
+            "docker.io/heroku/buildpack-fakey:_918273_linux-amd64"
+        );
+        assert_eq!(
+            bp_info.targets[1].permanent_tag,
+            "docker.io/heroku/buildpack-fakey:1.2.3_linux-arm64"
+        );
+    }
+
+    #[test]
+    fn read_targetless_buildpack() {
+        let bp_descriptor: BuildpackDescriptor = toml::from_str(
+            r#"
+                api = "0.10"
+                [buildpack]
+                id = "heroku/fakeymcfakeface"
+                version = "3.2.1"
+                [[stacks]]
+                id = "*"
+                [metadata.release]
+                image = { repository = "docker.io/heroku/buildpack-fakey" }
+            "#,
+        )
+        .expect("expected buildpack descriptor to parse");
+        let bp_dir = PathBuf::from("./fake-buildpack");
+        let package_dir = PathBuf::from("./packaged-fake");
+
+        let bp_info = read_buildpack_info(&bp_descriptor, &bp_dir, &package_dir, "1928273")
+            .expect("Expected to read buildpack info");
+
+        assert_eq!(bp_info.buildpack_id, "heroku/fakeymcfakeface");
+        assert_eq!(
+            bp_info.permanent_tag,
+            "docker.io/heroku/buildpack-fakey:3.2.1"
+        );
+        assert_eq!(
+            bp_info.targets[0].rust_triple,
+            Some("x86_64-unknown-linux-musl".to_string())
+        );
+        assert_eq!(
+            bp_info.targets[0].temporary_tag,
+            "docker.io/heroku/buildpack-fakey:_1928273"
+        );
+        assert_eq!(bp_info.targets[0].os, Some("linux".to_string()));
+        assert_eq!(bp_info.targets[0].arch, Some("amd64".to_string()));
+    }
 }
