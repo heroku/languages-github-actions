@@ -221,9 +221,13 @@ jobs:
       - name: Unpublish temp tags from this run
         if: always()
         env:
-          TEMP_TAGS: ${{ toJSON(matrix.temp_tags) }}
+          TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
           status=0
+          temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
+          temp_tags+=("${{ matrix.temporary_tag }}")
+          temp_tags=($(printf '%s\n' "${temp_tags[@]}" | sort -u)
+
           for temp_tag in "${temp_tags[@]}"; do
             echo "Checking $temp_tag for deletion"
             if crane digest "$temp_tag"; then
