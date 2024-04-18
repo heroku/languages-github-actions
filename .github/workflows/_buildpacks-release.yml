@@ -216,7 +216,7 @@ jobs:
             crane copy "${target_temp_tags[i]}" "${perm_tag}"
           done
           # promote primary image manifest or manifest list to permanent tag
-          crane copy "{{ matrix.temporary_tag }}" "{{ matrix.permanent_tag }}"
+          crane copy "${{ matrix.temporary_tag }}" "${{ matrix.permanent_tag }}"
 
       - name: Unpublish temp tags from this run
         if: always()
