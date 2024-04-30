@@ -1,6 +1,6 @@
 use crate::buildpacks::FindReleasableBuildpacksError;
 use crate::changelog::ChangelogError;
-use crate::github::actions::SetActionOutputError;
+use crate::github::actions::WriteActionDataError;
 use libcnb_data::buildpack::BuildpackVersion;
 use std::collections::HashMap;
 use std::io;
@@ -13,7 +13,7 @@ pub(crate) enum Error {
     #[error(transparent)]
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]
-    SetActionOutput(SetActionOutputError),
+    SetActionOutput(WriteActionDataError),
     #[error("Invalid URL `{0}` for argument --repository-url\nError: {1}")]
     InvalidRepositoryUrl(String, #[source] uriparse::URIError),
     #[error("Invalid Version `{0}` for argument --declarations-starting-version\nError: {1}")]

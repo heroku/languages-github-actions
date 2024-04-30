@@ -1,6 +1,6 @@
 use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorError};
 use crate::changelog::ChangelogError;
-use crate::github::actions::SetActionOutputError;
+use crate::github::actions::WriteActionDataError;
 use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
@@ -16,5 +16,5 @@ pub(crate) enum Error {
     #[error("Could not parse changelog\nPath: {}\nError: {1}", .0.display())]
     ParsingChangelog(PathBuf, #[source] ChangelogError),
     #[error(transparent)]
-    SetActionOutput(SetActionOutputError),
+    SetActionOutput(WriteActionDataError),
 }

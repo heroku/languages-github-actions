@@ -62,9 +62,13 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     let buildpacks_json =
-        serde_json::to_string(&buildpacks_info).map_err(Error::SerializingJson)?;
+        serde_json::to_string_pretty(&buildpacks_info).map_err(Error::SerializingJson)?;
 
-    actions::set_output("buildpacks", buildpacks_json).map_err(Error::SetActionOutput)?;
+    actions::set_output("buildpacks", &buildpacks_json).map_err(Error::WriteActionData)?;
+    actions::set_summary(format!(
+        "## Buildpack Matrix:\n```json\n{buildpacks_json}\n```"
+    ))
+    .map_err(Error::WriteActionData)?;
 
     let versions = buildpacks
         .iter()
@@ -80,7 +84,7 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
         .next()
         .ok_or(Error::FixedVersion(versions.clone()))?;
 
-    actions::set_output("version", version).map_err(Error::SetActionOutput)?;
+    actions::set_output("version", version).map_err(Error::WriteActionData)?;
 
     let rust_triples = buildpacks
         .iter()
@@ -92,7 +96,7 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
         "rust_triples",
         serde_json::to_string(&rust_triples).map_err(Error::SerializingJson)?,
     )
-    .map_err(Error::SetActionOutput)?;
+    .map_err(Error::WriteActionData)?;
 
     Ok(())
 }
@@ -101,12 +105,12 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
 pub(crate) struct BuildpackInfo {
     buildpack_id: String,
     buildpack_version: String,
+    buildpack_type: BuildpackType,
     buildpack_dir: PathBuf,
     targets: Vec<TargetInfo>,
     image_repository: String,
     stable_tag: String,
     temporary_tag: String,
-    buildpack_type: BuildpackType,
 }
 
 #[derive(Serialize)]
