@@ -228,11 +228,11 @@ jobs:
           # Promote target temp tags to stable tags
           target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
           for i in "${!target_temp_tags[@]}"; do
-            perm_tag=$(jq --exit-status -r ".[$i].permanent_tag" <<< "${TARGETS}")
-            crane copy "${target_temp_tags[i]}" "${perm_tag}"
+            stable_tag=$(jq --exit-status -r ".[$i].stable_tag" <<< "${TARGETS}")
+            crane copy "${target_temp_tags[i]}" "${stable_tag}"
           done
           # promote primary image manifest or manifest list to permanent tag
-          crane copy "${{ matrix.temporary_tag }}" "${{ matrix.permanent_tag }}"
+          crane copy "${{ matrix.temporary_tag }}" "${{ matrix.stable_tag }}"
 
       - name: Unpublish temp tags from this run
         if: always()
@@ -338,7 +338,7 @@ jobs:
 
       - name: Calculate the buildpack image digest
         id: digest
-        run: echo "value=$(crane digest ${{ matrix.permanent_tag }})" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(crane digest ${{ matrix.stable_tag }})" >> "$GITHUB_OUTPUT"
 
       - name: Register the new version with the CNB Buildpack Registry
         if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'

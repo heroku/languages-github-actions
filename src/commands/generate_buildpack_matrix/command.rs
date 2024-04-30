@@ -104,7 +104,7 @@ pub(crate) struct BuildpackInfo {
     buildpack_dir: PathBuf,
     targets: Vec<TargetInfo>,
     image_repository: String,
-    permanent_tag: String,
+    stable_tag: String,
     temporary_tag: String,
     buildpack_type: BuildpackType,
 }
@@ -115,7 +115,7 @@ pub(crate) struct TargetInfo {
     arch: Option<String>,
     rust_triple: Option<String>,
     cnb_file: String,
-    permanent_tag: String,
+    stable_tag: String,
     temporary_tag: String,
     output_dir: PathBuf,
 }
@@ -164,7 +164,7 @@ pub(crate) fn read_buildpack_info(
                         target,
                     )?,
                     rust_triple: rust_triple(target).ok(),
-                    permanent_tag: generate_tag(&image_repository, &version, suffix.as_deref()),
+                    stable_tag: generate_tag(&image_repository, &version, suffix.as_deref()),
                     temporary_tag: generate_tag(
                         &image_repository,
                         &format!("_{temporary_id}"),
@@ -173,7 +173,7 @@ pub(crate) fn read_buildpack_info(
                 })
             })
             .collect::<Result<Vec<_>>>()?,
-        permanent_tag: generate_tag(&image_repository, &version, None),
+        stable_tag: generate_tag(&image_repository, &version, None),
         temporary_tag: generate_tag(&image_repository, &format!("_{temporary_id}"), None),
         image_repository,
     })
@@ -345,7 +345,7 @@ mod tests {
             "docker.io/heroku/buildpack-fakey:_918273_linux-amd64"
         );
         assert_eq!(
-            bp_info.targets[1].permanent_tag,
+            bp_info.targets[1].stable_tag,
             "docker.io/heroku/buildpack-fakey:1.2.3_linux-arm64"
         );
         assert_eq!(
@@ -387,10 +387,7 @@ mod tests {
 
         assert_eq!(bp_info.buildpack_id, "heroku/fakeymcfakeface");
         assert_eq!(bp_info.buildpack_type, BuildpackType::Bash);
-        assert_eq!(
-            bp_info.permanent_tag,
-            "docker.io/heroku/buildpack-fakey:3.2.1"
-        );
+        assert_eq!(bp_info.stable_tag, "docker.io/heroku/buildpack-fakey:3.2.1");
         assert_eq!(
             bp_info.targets[0].temporary_tag,
             "docker.io/heroku/buildpack-fakey:_1928273"
