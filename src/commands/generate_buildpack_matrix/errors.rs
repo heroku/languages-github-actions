@@ -22,6 +22,12 @@ pub(crate) enum Error {
     SetActionOutput(SetActionOutputError),
     #[error("Unknown target configuration. Couldn't determine a rust triple for {0:?}.")]
     UnknownRustTarget(BuildpackTarget),
+    #[error("Couldn't determine buildpack type. Found evidence for two or more buildpack types (bash, composite, libcnb.rs) in {0}.")]
+    MultipleTypes(PathBuf),
+    #[error(
+        "Couldn't determine buildpack type. Found no evidence of a bash, composite, or libccnb.rs buildpack in {0}."
+    )]
+    UnknownType(PathBuf),
 }
 
 fn list_versions(versions: &HashSet<String>) -> String {

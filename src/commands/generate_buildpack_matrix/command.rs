@@ -106,6 +106,7 @@ pub(crate) struct BuildpackInfo {
     image_repository: String,
     permanent_tag: String,
     temporary_tag: String,
+    buildpack_type: BuildpackType,
 }
 
 #[derive(Serialize)]
@@ -119,6 +120,14 @@ pub(crate) struct TargetInfo {
     output_dir: PathBuf,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum BuildpackType {
+    Bash,
+    Composite,
+    Libcnb,
+}
+
 pub(crate) fn read_buildpack_info(
     buildpack_descriptor: &BuildpackDescriptor,
     buildpack_dir: &Path,
@@ -130,10 +139,12 @@ pub(crate) fn read_buildpack_info(
         Error::MissingImageRepositoryMetadata(buildpack_dir.join("buildpack.toml")),
     )?;
     let targets = read_buildpack_targets(buildpack_descriptor);
+    let buildpack_type = buildpack_type(buildpack_descriptor, buildpack_dir)?;
     Ok(BuildpackInfo {
         buildpack_id: buildpack_descriptor.buildpack().id.to_string(),
         buildpack_version: version.clone(),
         buildpack_dir: buildpack_dir.into(),
+        buildpack_type: buildpack_type.clone(),
         targets: read_buildpack_targets(buildpack_descriptor)
             .iter()
             .map(|target| {
@@ -148,7 +159,7 @@ pub(crate) fn read_buildpack_info(
                     arch: target.arch.clone(),
                     output_dir: target_output_dir(
                         &buildpack_descriptor.buildpack().id,
-                        buildpack_dir,
+                        &buildpack_type,
                         package_dir,
                         target,
                     )?,
@@ -223,31 +234,51 @@ fn rust_triple(target: &BuildpackTarget) -> Result<String> {
 // Returns the expected output directory for a target. For libcnb.rs buildpacks,
 // it should return the libcnb.rs packaged directory for the target
 // (e.g.: packaged/x86_64-unknown-linux-musl/release/heroku_procfile),
-// while bash buildpacks should return the buildpack directory itself, since
-// no compilation is required.
+// while legacy buildpacks should return a similar path without a rust triple.
 fn target_output_dir(
     buildpack_id: &BuildpackId,
-    buildpack_dir: &Path,
+    buildpack_type: &BuildpackType,
     package_dir: &Path,
     target: &BuildpackTarget,
 ) -> Result<PathBuf> {
-    if is_dynamic_buildpack(buildpack_dir) && !is_libcnb_buildpack(buildpack_dir) {
-        return Ok(buildpack_dir.into());
-    }
+    let target_dirname = match buildpack_type {
+        BuildpackType::Libcnb => rust_triple(target)?,
+        _ => target_name(target),
+    };
     Ok(create_packaged_buildpack_dir_resolver(
         package_dir,
         CargoProfile::Release,
-        &rust_triple(target)?,
+        &target_dirname,
     )(buildpack_id))
 }
 
-fn is_libcnb_buildpack(buildpack_dir: &Path) -> bool {
-    ["buildpack.toml", "Cargo.toml"]
-        .iter()
-        .all(|file| buildpack_dir.join(file).exists())
+fn buildpack_type(
+    buildpack_descriptor: &BuildpackDescriptor,
+    buildpack_dir: &Path,
+) -> Result<BuildpackType> {
+    match (
+        buildpack_descriptor,
+        has_cargo_toml(buildpack_dir),
+        has_bin_files(buildpack_dir),
+    ) {
+        (BuildpackDescriptor::Composite(_), false, false) => Ok(BuildpackType::Composite),
+        (BuildpackDescriptor::Composite(_), _, _) => {
+            Err(Error::MultipleTypes(buildpack_dir.into()))
+        }
+        (BuildpackDescriptor::Component(_), true, false) => Ok(BuildpackType::Libcnb),
+        (BuildpackDescriptor::Component(_), false, true) => Ok(BuildpackType::Bash),
+        (BuildpackDescriptor::Component(_), false, false) => {
+            Err(Error::UnknownType(buildpack_dir.into()))
+        }
+        (_, true, true) => Err(Error::MultipleTypes(buildpack_dir.into())),
+    }
 }
 
-fn is_dynamic_buildpack(buildpack_dir: &Path) -> bool {
+fn has_cargo_toml(buildpack_dir: &Path) -> bool {
+    buildpack_dir.join("Cargo.toml").exists()
+}
+
+fn has_bin_files(buildpack_dir: &Path) -> bool {
     ["detect", "build"]
         .iter()
         .all(|file| buildpack_dir.join("bin").join(file).exists())
@@ -256,11 +287,16 @@ fn is_dynamic_buildpack(buildpack_dir: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::read_buildpack_info;
+    use crate::commands::generate_buildpack_matrix::command::BuildpackType;
     use libcnb_data::buildpack::BuildpackDescriptor;
-    use std::path::PathBuf;
+    use std::{
+        fs::{create_dir_all, OpenOptions},
+        path::PathBuf,
+    };
+    use tempfile::tempdir;
 
     #[test]
-    fn read_multitarget_buildpack() {
+    fn read_multitarget_libcnb_buildpack() {
         let bp_descriptor: BuildpackDescriptor = toml::from_str(
             r#"
                 api = "0.10"
@@ -278,12 +314,18 @@ mod tests {
             "#,
         )
         .expect("expected buildpack descriptor to parse");
-        let bp_dir = PathBuf::from("./fake-buildpack");
         let package_dir = PathBuf::from("./packaged-fake");
+        let bp_dir = tempdir().expect("Error creating tempdir");
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(bp_dir.path().join("Cargo.toml"))
+            .expect("Couldn't write dummy Cargo.toml");
 
-        let bp_info = read_buildpack_info(&bp_descriptor, &bp_dir, &package_dir, "918273")
+        let bp_info = read_buildpack_info(&bp_descriptor, bp_dir.path(), &package_dir, "918273")
             .expect("Expected to read buildpack info");
         assert_eq!(bp_info.buildpack_id, "heroku/fakeymcfakeface");
+        assert_eq!(bp_info.buildpack_type, BuildpackType::Libcnb);
         assert_eq!(
             bp_info.temporary_tag,
             "docker.io/heroku/buildpack-fakey:_918273"
@@ -306,10 +348,16 @@ mod tests {
             bp_info.targets[1].permanent_tag,
             "docker.io/heroku/buildpack-fakey:1.2.3_linux-arm64"
         );
+        assert_eq!(
+            bp_info.targets[0].output_dir,
+            PathBuf::from(
+                "./packaged-fake/x86_64-unknown-linux-musl/release/heroku_fakeymcfakeface"
+            )
+        );
     }
 
     #[test]
-    fn read_targetless_buildpack() {
+    fn read_targetless_bash_buildpack() {
         let bp_descriptor: BuildpackDescriptor = toml::from_str(
             r#"
                 api = "0.10"
@@ -323,20 +371,25 @@ mod tests {
             "#,
         )
         .expect("expected buildpack descriptor to parse");
-        let bp_dir = PathBuf::from("./fake-buildpack");
         let package_dir = PathBuf::from("./packaged-fake");
+        let bp_dir = tempdir().expect("Error creating tempdir");
+        create_dir_all(bp_dir.path().join("bin")).expect("Couldn't create bash bin directory");
+        for filename in ["detect", "build"] {
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(bp_dir.path().join("bin").join(filename))
+                .expect("Couldn't write dummy bash file");
+        }
 
-        let bp_info = read_buildpack_info(&bp_descriptor, &bp_dir, &package_dir, "1928273")
+        let bp_info = read_buildpack_info(&bp_descriptor, bp_dir.path(), &package_dir, "1928273")
             .expect("Expected to read buildpack info");
 
         assert_eq!(bp_info.buildpack_id, "heroku/fakeymcfakeface");
+        assert_eq!(bp_info.buildpack_type, BuildpackType::Bash);
         assert_eq!(
             bp_info.permanent_tag,
             "docker.io/heroku/buildpack-fakey:3.2.1"
-        );
-        assert_eq!(
-            bp_info.targets[0].rust_triple,
-            Some("x86_64-unknown-linux-musl".to_string())
         );
         assert_eq!(
             bp_info.targets[0].temporary_tag,
@@ -344,5 +397,9 @@ mod tests {
         );
         assert_eq!(bp_info.targets[0].os, Some("linux".to_string()));
         assert_eq!(bp_info.targets[0].arch, Some("amd64".to_string()));
+        assert_eq!(
+            bp_info.targets[0].output_dir,
+            PathBuf::from("./packaged-fake/linux-amd64/release/heroku_fakeymcfakeface")
+        );
     }
 }

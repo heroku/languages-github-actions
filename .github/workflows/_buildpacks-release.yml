@@ -119,11 +119,13 @@ jobs:
           package_dir=$(realpath "${{ env.PACKAGE_DIR }}")
           for buildpack in $(jq --exit-status -c '.[]' <<< "${BUILDPACKS}"); do
             buildpack_dir=$(jq --exit-status -r '.buildpack_dir' <<< "${buildpack}")
+            buildpack_type=$(jq --exit-status -r '.buildpack_type' <<< "${buildpack}")
             cd "$buildpack_dir"
             for target in $(jq --exit-status -c '.targets | .[]' <<< "${buildpack}"); do
               output_dir=$(jq --exit-status -r '.output_dir' <<< "${target}")
-              if [[ "$buildpack_dir" -ef "$output_dir" ]]; then
-                echo "Skipping packaging of ${output_dir}. Not a libcnb.rs buildpack."
+              if [[ "$buildpack_type" == "bash" ]]; then
+                echo "Copying bash buildpack from ${buildpack_dir} to ${output_dir}."
+                cp -R "$buildpack_dir" "$output_dir"
                 continue
               fi
               echo "Packaging ${buildpack_dir}."
@@ -173,6 +175,20 @@ jobs:
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
 
+      - name: Cross-link source directories
+        env:
+          TARGETS: ${{ toJSON(matrix.targets) }}
+        run: |
+          # Composite buildpacks may refer to bash buildpacks by their source
+          # location , rather than their packaged location. The directories
+          # are symlinked to prevent those references from being broken.
+          if [[ "${{ matrix.buildpack_type }}" == "bash" ]]; then
+            source_dir=realpath "${{ matrix.buildpack_dir }}"
+            packaged_dir=realpath $(jq --exit-status -r ".[0].output_dir" <<< "${TARGETS}")
+            echo "Linking bash buildpack in ${package_dir} to ${source_dir}."
+            mkdir -p $(dirname "$source_dir")
+            ln -s "$packaged_dir" "$source_dir"
+          fi
 
       - name: Publish to temporary tags
         env:

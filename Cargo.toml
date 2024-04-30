@@ -51,3 +51,4 @@ serde = { version = "1.0.198", features = ["derive"] }
 
 [dev-dependencies]
 toml = "0.8"
+tempfile = "3.10"
