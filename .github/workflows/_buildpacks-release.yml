@@ -202,7 +202,7 @@ jobs:
             echo "Packaging ${output_dir} into ${target_temp_tags[i]}"
             pack buildpack package "${target_temp_tags[i]}" --config "${output_dir}/package.toml" -v --publish
             digest=$(crane digest "${target_temp_tags[i]}")
-            echo "- `${target_temp_tags[i]}`: `${digest}`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${target_temp_tags[i]}\`: \`${digest}\`" >> $GITHUB_STEP_SUMMARY
           done
 
           # If there is more than one target, publish a multi-platform
@@ -222,7 +222,7 @@ jobs:
             # Push the manifest list / image index to a temporary tag
             docker manifest push "${{ matrix.temporary_tag }}"
             digest=$(crane digest "${{ matrix.temporary_tag }}")
-            echo "- `${{ matrix.temorary_tag }}`: `${digest}`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${{ matrix.temorary_tag }}\`: \`${digest}\`" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Promote temporary tags to stable tags
