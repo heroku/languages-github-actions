@@ -66,7 +66,7 @@ pub(crate) fn execute(args: &GenerateBuildpackMatrixArgs) -> Result<()> {
 
     actions::set_output("buildpacks", &buildpacks_json).map_err(Error::WriteActionData)?;
     actions::set_summary(format!(
-        "<details><summary><b>Buildpack Matrix</b></summary>\n```json\n{buildpacks_json}\n```\n</details>"
+        "<details><summary>Buildpack Matrix</summary>\n```json\n{buildpacks_json}\n```\n</details>"
     ))
     .map_err(Error::WriteActionData)?;
 
