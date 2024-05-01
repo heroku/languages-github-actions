@@ -184,7 +184,7 @@ jobs:
           # location , rather than their packaged location. The directories
           # are symlinked to prevent those references from being broken.
           if [[ "${{ matrix.buildpack_type }}" == "bash" ]]; then
-            source_dir=realpath "${{ matrix.buildpack_dir }}"
+            source_dir="${{ matrix.buildpack_dir }}"
             packaged_dir=realpath $(jq --exit-status -r ".[0].output_dir" <<< "${TARGETS}")
             echo "Linking bash buildpack in ${package_dir} to ${source_dir}."
             mkdir -p $(dirname "$source_dir")
