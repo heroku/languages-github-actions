@@ -195,6 +195,7 @@ jobs:
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
+          echo "Published temorary tags:" >> $GITHUB_STEP_SUMMARY
           target_temp_tags=($(jq --exit-status -r "map(.temporary_tag) | join(\" \")" <<< "${TARGETS}"))
           # Publish each target to a temp tag
           for i in "${!target_temp_tags[@]}"; do
@@ -202,8 +203,7 @@ jobs:
             echo "Packaging ${output_dir} into ${target_temp_tags[i]}"
             pack buildpack package "${target_temp_tags[i]}" --config "${output_dir}/package.toml" -v --publish
             digest=$(crane digest "${target_temp_tags[i]}")
-            echo "### \`${target_temp_tags[i]}\`" >> $GITHUB_STEP_SUMMARY
-            echo "\`${{ matrix.image_repository}}@${digest}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${target_temp_tags[i]}\`\n  - \`${{ matrix.image_repository}}@${digest}\`" >> $GITHUB_STEP_SUMMARY
           done
 
           # If there is more than one target, publish a multi-platform
@@ -223,8 +223,7 @@ jobs:
             # Push the manifest list / image index to a temporary tag
             docker manifest push "${{ matrix.temporary_tag }}"
             digest=$(crane digest "${{ matrix.temporary_tag }}")
-            echo "### \`${{ matrix.temporary_tag }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "\`${{ matrix.image_repository}}@${digest}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${{ matrix.temporary_tag }}\`\n  - \`${{ matrix.image_repository}}@${digest}\`" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Promote temporary tags to stable tags
