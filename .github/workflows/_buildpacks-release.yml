@@ -157,8 +157,8 @@ jobs:
       # Composite buildpacks may refer to bash buildpacks by their source
       # location. Check out the source code so these links aren't broken.
       - name: Checkout
+        if: matrix.buildpack_type == 'composite'
         uses: actions/checkout@v4
-        if: matrix.buildpack_type == "composite"
         with:
           submodules: true
 
