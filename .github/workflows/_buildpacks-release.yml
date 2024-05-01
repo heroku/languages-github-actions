@@ -154,6 +154,14 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
+      # Composite buildpacks may refer to bash buildpacks by their source
+      # location. Check out the source code so these links aren't broken.
+      - name: Checkout
+        uses: actions/checkout@v4
+        if: matrix.buildpack_type == "composite"
+        with:
+          submodules: true
+
       - name: Restore buildpacks
         uses: actions/cache/restore@v4
         with:
@@ -175,21 +183,6 @@ jobs:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
-
-      - name: Cross-link source directories
-        env:
-          TARGETS: ${{ toJSON(matrix.targets) }}
-        run: |
-          # Composite buildpacks may refer to bash buildpacks by their source
-          # location , rather than their packaged location. The directories
-          # are symlinked to prevent those references from being broken.
-          if [[ "${{ matrix.buildpack_type }}" == "bash" ]]; then
-            source_dir="${{ matrix.buildpack_dir }}"
-            packaged_dir=realpath $(jq --exit-status -r ".[0].output_dir" <<< "${TARGETS}")
-            echo "Linking bash buildpack in ${package_dir} to ${source_dir}."
-            mkdir -p $(dirname "$source_dir")
-            ln -s "$packaged_dir" "$source_dir"
-          fi
 
       - name: Publish to temporary tags
         env:
