@@ -235,10 +235,11 @@ fn rust_triple(target: &BuildpackTarget) -> Result<String> {
     }
 }
 
-// Returns the expected output directory for a target. For libcnb.rs buildpacks,
-// it should return the libcnb.rs packaged directory for the target
+// Returns the expected output directory for a target. libcnb.rs and composite
+// buildpacks should return the libcnb.rs packaged directory.
 // (e.g.: packaged/x86_64-unknown-linux-musl/release/heroku_procfile),
-// while legacy buildpacks should return a similar path without a rust triple.
+// while bash buildpacks should return a similar path, without relying on a
+// rust triple.
 fn target_output_dir(
     buildpack_id: &BuildpackId,
     buildpack_type: &BuildpackType,
@@ -246,8 +247,8 @@ fn target_output_dir(
     target: &BuildpackTarget,
 ) -> Result<PathBuf> {
     let target_dirname = match buildpack_type {
-        BuildpackType::Libcnb => rust_triple(target)?,
-        _ => target_name(target),
+        BuildpackType::Bash => target_name(target),
+        _ => rust_triple(target)?,
     };
     Ok(create_packaged_buildpack_dir_resolver(
         package_dir,
