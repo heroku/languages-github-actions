@@ -321,7 +321,7 @@ jobs:
           files: "*.cnb"
           fail_on_unmatched_files: true
 
-  publish-cnb:
+  publish-cnb-registry:
     name: Publish → CNB Registry - ${{ matrix.buildpack_id }}
     needs: [compile, publish-docker]
     runs-on: ubuntu-latest
@@ -358,7 +358,7 @@ jobs:
 
   update-builder:
     name: Update Builder
-    needs: [compile, publish-docker, publish-cnb, publish-github]
+    needs: [compile, publish-docker, publish-cnb-registry, publish-github]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
       - name: Get token for GH application (Linguist)
