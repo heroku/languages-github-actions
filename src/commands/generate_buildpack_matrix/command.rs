@@ -324,6 +324,7 @@ mod tests {
         OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(bp_dir.path().join("Cargo.toml"))
             .expect("Couldn't write dummy Cargo.toml");
 
@@ -383,6 +384,7 @@ mod tests {
             OpenOptions::new()
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(bp_dir.path().join("bin").join(filename))
                 .expect("Couldn't write dummy bash file");
         }
