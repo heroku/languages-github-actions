@@ -1,5 +1,6 @@
 use crate::buildpacks::{FindReleasableBuildpacksError, ReadBuildpackDescriptorError};
-use crate::github::actions::SetActionOutputError;
+use crate::github::actions::WriteActionDataError;
+use libcnb_data::buildpack::BuildpackTarget;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -18,7 +19,15 @@ pub(crate) enum Error {
     #[error("Expected all buildpacks to have the same version but multiple versions were found:\n{}", list_versions(.0))]
     FixedVersion(HashSet<String>),
     #[error(transparent)]
-    SetActionOutput(SetActionOutputError),
+    WriteActionData(WriteActionDataError),
+    #[error("Unknown target configuration. Couldn't determine a rust triple for {0:?}.")]
+    UnknownRustTarget(BuildpackTarget),
+    #[error("Couldn't determine buildpack type. Found evidence for two or more buildpack types (bash, composite, libcnb.rs) in {0}.")]
+    MultipleTypes(PathBuf),
+    #[error(
+        "Couldn't determine buildpack type. Found no evidence of a bash, composite, or libcnb.rs buildpack in {0}."
+    )]
+    UnknownType(PathBuf),
 }
 
 fn list_versions(versions: &HashSet<String>) -> String {
