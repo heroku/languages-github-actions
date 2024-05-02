@@ -154,8 +154,10 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
-      # Composite buildpacks may refer to bash buildpacks by their source
-      # location. Check out the source code so these links aren't broken.
+      # Composite buildpacks that depend on bash buildpacks (like
+      # heroku/nodejs-function) refer to bash buildpacks by their source
+      # location rather than the packaged location. Other buildpacks don't
+      # don't need this step, so it's skipped where possible.
       - name: Checkout
         if: matrix.buildpack_type == 'composite'
         uses: actions/checkout@v4
@@ -271,6 +273,12 @@ jobs:
     needs: [compile]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
+      # Composite buildpacks that depend on bash buildpacks (like
+      # heroku/nodejs-function) refer to bash buildpacks by their source
+      # location rather than the packaged location. Other buildpacks don't
+      # don't need this step. Since it's challenging to determine if any of
+      # the buildpacks in this repo meet this criteria, and this step is
+      # reasonably fast, it is always run.
       - name: Checkout
         uses: actions/checkout@v4
         with:
