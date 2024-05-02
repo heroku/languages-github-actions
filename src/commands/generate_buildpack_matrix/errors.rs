@@ -25,7 +25,7 @@ pub(crate) enum Error {
     #[error("Couldn't determine buildpack type. Found evidence for two or more buildpack types (bash, composite, libcnb.rs) in {0}.")]
     MultipleTypes(PathBuf),
     #[error(
-        "Couldn't determine buildpack type. Found no evidence of a bash, composite, or libccnb.rs buildpack in {0}."
+        "Couldn't determine buildpack type. Found no evidence of a bash, composite, or libcnb.rs buildpack in {0}."
     )]
     UnknownType(PathBuf),
 }
