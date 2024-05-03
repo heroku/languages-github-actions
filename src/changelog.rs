@@ -179,7 +179,7 @@ pub(crate) enum ChangelogError {
     #[error("No root node in changelog markdown")]
     NoRootNode,
     #[error("Could not parse changelog - {0}")]
-    Parse(String),
+    Parse(markdown::message::Message),
     #[error("Invalid semver version in release entry - {0}")]
     ParseVersion(#[source] semver::Error),
     #[error("Invalid year in release entry - {0}")]
