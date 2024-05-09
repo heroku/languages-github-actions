@@ -6,6 +6,7 @@ use crate::commands::resolve_path;
 use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackId, BuildpackTarget};
+use libcnb_data::generic::GenericMetadata;
 use libcnb_package::output::{
     create_packaged_buildpack_dir_resolver, default_buildpack_directory_name,
 };
@@ -189,7 +190,9 @@ pub(crate) fn read_buildpack_info(
 fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<BuildpackTarget> {
     let mut targets = match buildpack_descriptor {
         BuildpackDescriptor::Component(descriptor) => descriptor.targets.clone(),
-        BuildpackDescriptor::Composite(_) => vec![],
+        BuildpackDescriptor::Composite(descriptor) => {
+            read_metadata_targets(descriptor.metadata.clone()).unwrap_or_default()
+        }
     };
     if targets.is_empty() {
         targets.push(BuildpackTarget {
@@ -287,6 +290,31 @@ fn has_bin_files(buildpack_dir: &Path) -> bool {
     ["detect", "build"]
         .iter()
         .all(|file| buildpack_dir.join("bin").join(file).exists())
+}
+
+// Project descriptors for composite buildpacks don't support `[[targets]]`,
+// but this project needs a way to determine what targets to package composite
+// buildpacks for. This function reads `[[targets]]` out of a project
+// descriptor's metadata (which is unrestricted) instead.
+fn read_metadata_targets(md: GenericMetadata) -> Option<Vec<BuildpackTarget>> {
+    let get_toml_string = |table: &toml::Table, key: &str| -> Option<String> {
+        Some(table.get(key)?.as_str()?.to_string())
+    };
+    Some(
+        md?.get("targets")?
+            .as_array()?
+            .iter()
+            .filter_map(|tgt_value| {
+                let tgt_table = tgt_value.as_table()?;
+                Some(BuildpackTarget {
+                    os: get_toml_string(tgt_table, "os"),
+                    arch: get_toml_string(tgt_table, "arch"),
+                    variant: get_toml_string(tgt_table, "variant"),
+                    distros: vec![],
+                })
+            })
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -404,6 +432,49 @@ mod tests {
         assert_eq!(
             bp_info.targets[0].output_dir,
             PathBuf::from("./packaged-fake/linux-amd64/release/heroku_fakeymcfakeface")
+        );
+    }
+
+    #[test]
+    fn read_composite_buildpack() {
+        let bp_descriptor: BuildpackDescriptor = toml::from_str(
+            r#"
+                api = "0.10"
+                [buildpack]
+                id = "heroku/fakeymcfakeface"
+                version = "3.2.1"
+                [[order]]
+                [[order.group]]
+                id = "heroku/nodejs-engine"
+                version = "3.0.5"
+                [[metadata.targets]]
+                os = "linux"
+                arch = "amd64"
+                [[metadata.targets]]
+                os = "linux"
+                arch = "arm64"
+                [metadata.release]
+                image = { repository = "docker.io/heroku/buildpack-fakey" }
+            "#,
+        )
+        .expect("expected buildpack descriptor to parse");
+        let package_dir = PathBuf::from("./packaged-fake");
+        let bp_dir = tempdir().expect("Error creating tempdir");
+
+        let bp_info = read_buildpack_info(&bp_descriptor, bp_dir.path(), &package_dir, "1928273")
+            .expect("Expected to read buildpack info");
+
+        assert_eq!(bp_info.buildpack_id, "heroku/fakeymcfakeface");
+        assert_eq!(bp_info.buildpack_type, BuildpackType::Composite);
+
+        assert_eq!(bp_info.targets[0].os, Some("linux".to_string()));
+        assert_eq!(bp_info.targets[0].arch, Some("amd64".to_string()));
+        assert_eq!(bp_info.targets[1].arch, Some("arm64".to_string()));
+        assert_eq!(
+            bp_info.targets[1].output_dir,
+            PathBuf::from(
+                "./packaged-fake/aarch64-unknown-linux-musl/release/heroku_fakeymcfakeface"
+            )
         );
     }
 }
