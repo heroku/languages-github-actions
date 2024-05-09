@@ -191,7 +191,7 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Bui
     let mut targets = match buildpack_descriptor {
         BuildpackDescriptor::Component(descriptor) => descriptor.targets.clone(),
         BuildpackDescriptor::Composite(descriptor) => {
-            read_metadata_targets(descriptor.metadata.clone()).unwrap_or(vec![])
+            read_metadata_targets(descriptor.metadata.clone()).unwrap_or_default()
         }
     };
     if targets.is_empty() {
@@ -304,7 +304,7 @@ fn read_metadata_targets(md: GenericMetadata) -> Option<Vec<BuildpackTarget>> {
         md?.get("targets")?
             .as_array()?
             .iter()
-            .flat_map(|tgt_value| {
+            .filter_map(|tgt_value| {
                 let tgt_table = tgt_value.as_table()?;
                 Some(BuildpackTarget {
                     os: get_toml_string(tgt_table, "os"),
