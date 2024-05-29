@@ -29,18 +29,18 @@ jobs:
     runs-on: pub-hk-ubuntu-22.04-small
     steps:
       - name: Get token for GH application (Linguist)
-        uses: heroku/use-app-token-action@main
+        uses: actions/create-github-app-token@v1
         id: generate-token
         with:
-          app_id: ${{ vars.LINGUIST_GH_APP_ID }}
-          private_key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
+          app-id: ${{ vars.LINGUIST_GH_APP_ID }}
+          private-key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
-          token: ${{ steps.generate-token.outputs.app_token }}
+          token: ${{ steps.generate-token.outputs.token }}
 
       # This will ensure commits made from this workflow are attributed to the GH application user
       - name: Configure git
@@ -61,7 +61,7 @@ jobs:
         id: previous-version
         run: echo "value=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')" >> $GITHUB_OUTPUT
         env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Bump version
         run: |
@@ -122,7 +122,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2.0.4
         env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         with:
           target_commitish: ${{ steps.release-tag.outputs.sha }}
           tag_name: v${{ steps.metadata.outputs.version }}
