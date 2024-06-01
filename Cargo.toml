@@ -33,6 +33,7 @@ clap = { version = "4", default-features = false, features = [
     "std",
     "usage",
 ] }
+fastrand = "2"
 ignore = "0.4"
 indexmap = "2"
 lazy_static = "1"
@@ -40,15 +41,14 @@ libcnb-common = "=0.21.0"
 libcnb-data = "=0.21.0"
 libcnb-package = "=0.21.0"
 markdown = "1.0.0-alpha.17"
-fastrand = "2"
 regex = "1"
 semver = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
 toml = "0.8"
 toml_edit = "0.22"
 uriparse = "0.6"
-serde = { version = "1.0.198", features = ["derive"] }
 
 [dev-dependencies]
-tempfile = "3.10"
+tempfile = "3"
