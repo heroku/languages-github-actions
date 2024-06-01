@@ -321,7 +321,7 @@ jobs:
 
       - name: Create GitHub Release
         if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
-        uses: softprops/action-gh-release@v2.0.4
+        uses: softprops/action-gh-release@v2.0.5
         with:
           token: ${{ steps.generate-token.outputs.app_token }}
           tag_name: v${{ needs.compile.outputs.version }}
