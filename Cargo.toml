@@ -48,7 +48,7 @@ thiserror = "1"
 toml = "0.8"
 toml_edit = "0.22"
 uriparse = "0.6"
-serde = { version = "1.0.198", features = ["derive"] }
+serde = { version = "1.0.203", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.10"
