@@ -307,23 +307,23 @@ jobs:
           done
 
       - name: Get token for GitHub application (Linguist)
-        uses: heroku/use-app-token-action@main
+        uses: actions/create-github-app-token@v1
         id: generate-token
         with:
-          app_id: ${{ inputs.app_id }}
-          private_key: ${{ secrets.app_private_key }}
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
 
       - name: Check if release exists
         id: check
         env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
         uses: softprops/action-gh-release@v2.0.6
         with:
-          token: ${{ steps.generate-token.outputs.app_token }}
+          token: ${{ steps.generate-token.outputs.token }}
           tag_name: v${{ needs.compile.outputs.version }}
           body: ${{ needs.compile.outputs.changelog }}
           files: "*.cnb"
@@ -370,11 +370,12 @@ jobs:
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
       - name: Get token for GH application (Linguist)
-        uses: heroku/use-app-token-action@main
+        uses: actions/create-github-app-token@v1
         id: generate-token
         with:
-          app_id: ${{ inputs.app_id }}
-          private_key: ${{ secrets.app_private_key }}
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+          repositories: heroku/cnb-builder-images
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -388,7 +389,7 @@ jobs:
           path: ./cnb-builder-images
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
-          token: ${{ steps.generate-token.outputs.app_token }}
+          token: ${{ steps.generate-token.outputs.token }}
 
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@v5.7.2
@@ -409,7 +410,7 @@ jobs:
         id: pr
         uses: peter-evans/create-pull-request@v6.1.0
         with:
-          token: ${{ steps.generate-token.outputs.app_token }}
+          token: ${{ steps.generate-token.outputs.token }}
           title: Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
           body: ${{ needs.compile.outputs.changelog }}
           commit-message: |
@@ -427,4 +428,4 @@ jobs:
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash --repo heroku/cnb-builder-images "${{ steps.pr.outputs.pull-request-number }}"
         env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.app_token }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
