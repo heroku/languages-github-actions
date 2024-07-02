@@ -375,7 +375,8 @@ jobs:
         with:
           app-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
-          repositories: heroku/cnb-builder-images
+          owner: heroku
+          repositories: cnb-builder-images
 
       - name: Checkout
         uses: actions/checkout@v4
