@@ -302,7 +302,8 @@ jobs:
             for target in $(jq --exit-status -c ".targets | .[]" <<< "${buildpack}"); do
               output_dir=$(jq --exit-status -r ".output_dir" <<< "${target}")
               cnb_file=$(jq --exit-status -r ".cnb_file" <<< "${target}")
-              pack buildpack package "$cnb_file" --config "${output_dir}/package.toml" --format file --verbose
+              oci_target=$(jq --exit-status -r ".oci_target" <<< "${target}")
+              pack buildpack package "$cnb_file" --target "${oci_target}" --config "${output_dir}/package.toml" --format file --verbose
             done
           done
 

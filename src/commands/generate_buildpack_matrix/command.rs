@@ -119,6 +119,7 @@ pub(crate) struct TargetInfo {
     os: Option<String>,
     arch: Option<String>,
     rust_triple: Option<String>,
+    oci_target: String,
     cnb_file: String,
     stable_tag: String,
     temporary_tag: String,
@@ -161,6 +162,7 @@ pub(crate) fn read_buildpack_info(
                 Ok(TargetInfo {
                     cnb_file: cnb_file(&buildpack_descriptor.buildpack().id, suffix.as_deref()),
                     os: target.os.clone(),
+                    oci_target: oci_target(target),
                     arch: target.arch.clone(),
                     output_dir: target_output_dir(
                         &buildpack_descriptor.buildpack().id,
@@ -218,6 +220,15 @@ fn cnb_file(buildpack_id: &BuildpackId, suffix: Option<&str>) -> String {
         || format!("{name}.cnb"),
         |suffix| format!("{name}_{suffix}.cnb"),
     )
+}
+
+// Returns the OCI target name for a buildpack target. Currently ignores distros.
+fn oci_target(target: &BuildpackTarget) -> String {
+    match (target.os.as_deref(), target.arch.as_deref()) {
+        (Some(os), Some(arch)) => format!("{os}/{arch}"),
+        (Some(os), None) => os.to_string(),
+        (None, _) => String::new(),
+    }
 }
 
 // Returns the target naming suffix for image tags and .cnb files.
@@ -374,6 +385,8 @@ mod tests {
             bp_info.targets[1].rust_triple,
             Some("aarch64-unknown-linux-musl".to_string())
         );
+        assert_eq!(bp_info.targets[0].oci_target, "linux/amd64");
+        assert_eq!(bp_info.targets[1].oci_target, "linux/arm64");
         assert_eq!(
             bp_info.targets[0].temporary_tag,
             "docker.io/heroku/buildpack-fakey:_918273_linux-amd64"
