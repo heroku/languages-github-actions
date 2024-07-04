@@ -156,7 +156,7 @@ jobs:
     steps:
       # Composite buildpacks that depend on bash buildpacks (like
       # heroku/nodejs-function) refer to bash buildpacks by their source
-      # location rather than the packaged location. Other buildpacks don't
+      # location rather than the packaged location. Other buildpacks
       # don't need this step, so it's skipped where possible.
       - name: Checkout
         if: matrix.buildpack_type == 'composite'
@@ -186,7 +186,12 @@ jobs:
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
 
+      - name: Check if version is already on Docker Hub
+        id: check
+        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.stable_tag }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
       - name: Publish to temporary tags
+        if: steps.check.outputs.published_to_docker == 'false'
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
@@ -222,7 +227,7 @@ jobs:
           fi
 
       - name: Promote temporary tags to stable tags
-        if: inputs.dry_run == false
+        if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
