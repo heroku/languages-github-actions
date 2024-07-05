@@ -49,7 +49,7 @@ on:
 defaults:
   run:
     # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
-    # ratherthan only error on exit (improving failure UX when pipes are used). See:
+    # rather than only error on exit (improving failure UX when pipes are used). See:
     # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
     shell: bash
 
