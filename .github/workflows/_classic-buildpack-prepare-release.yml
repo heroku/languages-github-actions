@@ -18,7 +18,7 @@ defaults:
 jobs:
   prepare-release:
     name: Prepare Release
-    runs-on: pub-hk-ubuntu-22.04-small
+    runs-on: pub-hk-ubuntu-24.04-ip
     steps:
       # We use our GitHub App's access token instead of GITHUB_TOKEN since otherwise other
       # workflows (such as CI) won't automatically run on any PRs opened by this workflow:

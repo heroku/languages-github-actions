@@ -71,13 +71,13 @@ jobs:
 
 #### Inputs
 
-| Name                            | Description                                                                                                                                                                                             | Required | Default                     |
-|---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------------------------|
-| `app_id`                        | Application ID of GitHub application (e.g. the Linguist App)                                                                                                                                            | true     |                             |
-| `bump`                          | Which component of the version to increment (major, minor, or patch)                                                                                                                                    | true     |                             |
-| `declarations_starting_version` | Only needed if existing releases have been published but there is no matching release tag in Git. If this is the case, the first git tag that matches a version from your CHANGELOG should be supplied. | false    |                             |
-| `ip_allowlisted_runner`         | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                                                                                                                      | false    | `pub-hk-ubuntu-22.04-small` |
-| `languages_cli_branch`          | The branch to install the Languages CLI from (FOR TESTING)                                                                                                                                              | false    | `main`                      |
+| Name                            | Description                                                                                                                                                                                             | Required | Default                  |
+|---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------|
+| `app_id`                        | Application ID of GitHub application (e.g. the Linguist App)                                                                                                                                            | true     |                          |
+| `bump`                          | Which component of the version to increment (major, minor, or patch)                                                                                                                                    | true     |                          |
+| `declarations_starting_version` | Only needed if existing releases have been published but there is no matching release tag in Git. If this is the case, the first git tag that matches a version from your CHANGELOG should be supplied. | false    |                          |
+| `ip_allowlisted_runner`         | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                                                                                                                      | false    | `pub-hk-ubuntu-24.04-ip` |
+| `languages_cli_branch`          | The branch to install the Languages CLI from (FOR TESTING)                                                                                                                                              | false    | `main`                   |
 
 #### Secrets
 
@@ -132,12 +132,12 @@ jobs:
 
 #### Inputs
 
-| Name                    | Description                                                                                         | Required | Default                     |
-|-------------------------|-----------------------------------------------------------------------------------------------------|----------|-----------------------------|
-| `app_id`                | Application ID of GitHub application (e.g. the Linguist App)                                        | true     |                             |
-| `dry_run`               | Flag used for testing purposes to prevent actions that perform publishing operations from executing | false    | false                       |
-| `ip_allowlisted_runner` | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                  | false    | `pub-hk-ubuntu-22.04-small` |
-| `languages_cli_branch`  | The branch to install the Languages CLI from (FOR TESTING)                                          | false    | `main`                      |
+| Name                    | Description                                                                                         | Required | Default                  |
+|-------------------------|-----------------------------------------------------------------------------------------------------|----------|--------------------------|
+| `app_id`                | Application ID of GitHub application (e.g. the Linguist App)                                        | true     |                          |
+| `dry_run`               | Flag used for testing purposes to prevent actions that perform publishing operations from executing | false    | false                    |
+| `ip_allowlisted_runner` | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                  | false    | `pub-hk-ubuntu-24.04-ip` |
+| `languages_cli_branch`  | The branch to install the Languages CLI from (FOR TESTING)                                          | false    | `main`                   |
 
 #### Secrets
 
