@@ -40,7 +40,7 @@ lazy_static = "1"
 libcnb-common = "=0.22.0"
 libcnb-data = "=0.22.0"
 libcnb-package = "=0.22.0"
-markdown = "1.0.0-alpha.17"
+markdown = "1.0.0-alpha.18"
 regex = "1"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
