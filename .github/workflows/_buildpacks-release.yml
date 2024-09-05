@@ -60,12 +60,18 @@ env:
 jobs:
   compile:
     name: Compile Buildpacks
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     outputs:
       buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
       version: ${{ steps.generate-buildpack-matrix.outputs.version }}
       changelog: ${{ steps.generate-changelog.outputs.changelog }}
     steps:
+      - name: Get token for GH application (Linguist)
+        uses: actions/create-github-app-token@v1
+        id: generate-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -278,6 +284,13 @@ jobs:
     needs: [compile]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
+      - name: Get token for GH application (Linguist)
+        uses: actions/create-github-app-token@v1
+        id: generate-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
       # Composite buildpacks that depend on bash buildpacks (like
       # heroku/nodejs-function) refer to bash buildpacks by their source
       # location rather than the packaged location. Other buildpacks don't
