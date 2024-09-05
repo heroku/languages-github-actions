@@ -325,13 +325,6 @@ jobs:
             done
           done
 
-      - name: Get token for GitHub application (Linguist)
-        uses: actions/create-github-app-token@v1
-        id: generate-token
-        with:
-          app-id: ${{ inputs.app_id }}
-          private-key: ${{ secrets.app_private_key }}
-
       - name: Check if release exists
         id: check
         env:
