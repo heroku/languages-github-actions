@@ -120,7 +120,7 @@ jobs:
           echo "sha=$(git rev-list -n 1 v${{ steps.metadata.outputs.version }})" >> $GITHUB_OUTPUT
 
       - name: Create release
-        uses: softprops/action-gh-release@v2.0.8
+        uses: softprops/action-gh-release@v2.0.9
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         with:
