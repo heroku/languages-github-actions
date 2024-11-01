@@ -98,7 +98,7 @@ jobs:
           done
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2.7.3
+        uses: Swatinem/rust-cache@v2.7.5
 
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
