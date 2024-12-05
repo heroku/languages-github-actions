@@ -12,17 +12,17 @@ pub(crate) enum CalculateDigestError {
     ExitStatus(String, ExitStatus),
 }
 
-pub(crate) fn calculate_digest(digest_url: &String) -> Result<String, CalculateDigestError> {
+pub(crate) fn calculate_digest(digest_url: &str) -> Result<String, CalculateDigestError> {
     let output = Command::new("crane")
         .args(["digest", digest_url])
         .output()
-        .map_err(|e| CalculateDigestError::CommandFailure(digest_url.clone(), e))?;
+        .map_err(|e| CalculateDigestError::CommandFailure(digest_url.to_owned(), e))?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
         Err(CalculateDigestError::ExitStatus(
-            digest_url.clone(),
+            digest_url.to_owned(),
             output.status,
         ))
     }

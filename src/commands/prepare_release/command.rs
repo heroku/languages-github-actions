@@ -116,7 +116,7 @@ pub(crate) fn execute(args: PrepareReleaseArgs) -> Result<()> {
         let release_declarations = generate_release_declarations(
             &new_changelog,
             repository_url.to_string(),
-            &declarations_starting_version,
+            declarations_starting_version.as_ref(),
         );
 
         let changelog_contents = format!("{new_changelog}\n{release_declarations}\n");
