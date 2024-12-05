@@ -58,7 +58,7 @@ pub(crate) fn find_releasable_buildpacks(
         .map_err(|e| FindReleasableBuildpacksError(starting_dir.to_path_buf(), e))
 }
 #[derive(Debug, thiserror::Error)]
-#[error("I/O error while finding buildpacks\nPath: {}\nError: {1}", .0.display())]
+#[error("I/O error while finding buildpacks\nPath: {0}\nError: {1}")]
 pub(crate) struct FindReleasableBuildpacksError(PathBuf, ignore::Error);
 
 pub(crate) fn read_buildpack_descriptor(
@@ -70,7 +70,7 @@ pub(crate) fn read_buildpack_descriptor(
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Failed to read buildpack descriptor\nPath: {}\nError: {1}", .0.display())]
+#[error("Failed to read buildpack descriptor\nPath: {0}\nError: {1}")]
 pub(crate) struct ReadBuildpackDescriptorError(PathBuf, #[source] TomlFileError);
 
 #[cfg(test)]
