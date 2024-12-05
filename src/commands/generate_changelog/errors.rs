@@ -11,9 +11,9 @@ pub(crate) enum Error {
     FindReleasableBuildpacks(FindReleasableBuildpacksError),
     #[error(transparent)]
     ReadBuildpackDescriptor(ReadBuildpackDescriptorError),
-    #[error("Could not read changelog\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not read changelog\nPath: {0}\nError: {1}")]
     ReadingChangelog(PathBuf, #[source] std::io::Error),
-    #[error("Could not parse changelog\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not parse changelog\nPath: {0}\nError: {1}")]
     ParsingChangelog(PathBuf, #[source] ChangelogError),
     #[error(transparent)]
     SetActionOutput(WriteActionDataError),

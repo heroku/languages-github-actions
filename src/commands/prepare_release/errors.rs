@@ -24,23 +24,23 @@ pub(crate) enum Error {
     NotAllVersionsMatch(HashMap<PathBuf, BuildpackVersion>),
     #[error("No fixed version could be determined")]
     NoFixedVersion,
-    #[error("Could not read changelog\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not read changelog\nPath: {0}\nError: {1}")]
     ReadingChangelog(PathBuf, #[source] io::Error),
-    #[error("Could not parse changelog\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not parse changelog\nPath: {0}\nError: {1}")]
     ParsingChangelog(PathBuf, #[source] ChangelogError),
-    #[error("Could not write changelog\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not write changelog\nPath: {0}\nError: {1}")]
     WritingChangelog(PathBuf, #[source] io::Error),
-    #[error("Missing required field `{1}` in buildpack.toml\nPath: {}", .0.display())]
+    #[error("Missing required field `{1}` in buildpack.toml\nPath: {0}")]
     MissingRequiredField(PathBuf, String),
-    #[error("Invalid buildpack id `{1}` in buildpack.toml\nPath: {}", .0.display())]
+    #[error("Invalid buildpack id `{1}` in buildpack.toml\nPath: {0}")]
     InvalidBuildpackId(PathBuf, String),
-    #[error("Invalid buildpack version `{1}` in buildpack.toml\nPath: {}", .0.display())]
+    #[error("Invalid buildpack version `{1}` in buildpack.toml\nPath: {0}")]
     InvalidBuildpackVersion(PathBuf, String),
-    #[error("Could not read buildpack\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not read buildpack\nPath: {0}\nError: {1}")]
     ReadingBuildpack(PathBuf, #[source] io::Error),
-    #[error("Could not parse buildpack\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not parse buildpack\nPath: {0}\nError: {1}")]
     ParsingBuildpack(PathBuf, #[source] toml_edit::TomlError),
-    #[error("Could not write buildpack\nPath: {}\nError: {1}", .0.display())]
+    #[error("Could not write buildpack\nPath: {0}\nError: {1}")]
     WritingBuildpack(PathBuf, #[source] io::Error),
 }
 
