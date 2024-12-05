@@ -197,13 +197,13 @@ pub(crate) enum ChangelogError {
 pub(crate) fn generate_release_declarations<S: Into<String>>(
     changelog: &Changelog,
     repository: S,
-    starting_with_version: &Option<Version>,
+    starting_with_version: Option<&Version>,
 ) -> String {
     let repository = repository.into();
 
     let mut versions = changelog.releases.values().filter_map(|release| {
         if let Some(starting_version) = &starting_with_version {
-            if starting_version.le(&release.version) {
+            if (*starting_version).le(&release.version) {
                 Some(&release.version)
             } else {
                 None
@@ -394,7 +394,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
-            &None,
+            None,
         );
         assert_eq!(
             declarations,
@@ -422,7 +422,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
-            &None,
+            None,
         );
         assert_eq!(
             declarations,
@@ -438,7 +438,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
-            &None,
+            None,
         );
         assert_eq!(
             declarations,
@@ -452,7 +452,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         let declarations = generate_release_declarations(
             &changelog,
             "https://github.com/olivierlacan/keep-a-changelog",
-            &Some(Version {
+            Some(&Version {
                 major: 1,
                 minor: 0,
                 patch: 0,
