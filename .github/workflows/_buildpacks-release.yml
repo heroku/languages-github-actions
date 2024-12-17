@@ -132,6 +132,9 @@ jobs:
               echo "Packaging ${buildpack_dir}."
               triple=$(jq --exit-status -r '.rust_triple' <<< "${target}")
               cargo libcnb package --release --package-dir "${package_dir}" --target "${triple}"
+              os=$(jq --exit-status -r '.os' <<< "${target}")
+              arch=$(jq --exit-status -r '.arch' <<< "${target}")
+              sed -r -i "s/(docker:\/\/.+:[0-9.]+)/\0_${os}-${arch}/" "${package_dir}/package.toml"
             done
           done
 
