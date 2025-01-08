@@ -1,5 +1,4 @@
 name: _buildpacks-prepare-release
-
 on:
   workflow_call:
     inputs:
@@ -41,17 +40,14 @@ on:
       app_private_key:
         description: Private key of GitHub application (Linguist)
         required: true
-
 defaults:
   run:
     # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
     # rather than only error on exit (improving failure UX when pipes are used). See:
     # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
     shell: bash
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   prepare-release:
     name: Prepare Release
@@ -63,19 +59,16 @@ jobs:
         with:
           app-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.token }}
-
       - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@v0.9.0
         with:
           branch: ${{ inputs.languages_cli_branch }}
-
       - name: Bump versions and update changelogs
         id: prepare
         run: |
@@ -83,11 +76,9 @@ jobs:
             --bump ${{ inputs.bump }} \
             --repository-url https://github.com/${{ github.repository }} \
             ${{ inputs.declarations_starting_version && format('--declarations-starting-version {0}', inputs.declarations_starting_version) }}
-
       - name: Generate changelog
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.prepare.outputs.to_version }}
-
       - name: Create pull request
         id: pr
         uses: peter-evans/create-pull-request@v7.0.6
@@ -104,7 +95,6 @@ jobs:
           # This will ensure commits made from this workflow are attributed to the GH application user
           committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
           author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
-
       - name: Configure pull request
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash "${{ steps.pr.outputs.pull-request-number }}"
