@@ -180,7 +180,7 @@ fn is_buildpack_using_cnb_shim(document: &DocumentMut, buildpack_id: &BuildpackI
                     .any(|uri| match URI::try_from(uri) {
                         Ok(parsed_uri) => parsed_uri
                             .host()
-                            .map_or(false, |host| host.to_string() == "cnb-shim.herokuapp.com"),
+                            .is_some_and(|host| host.to_string() == "cnb-shim.herokuapp.com"),
                         Err(_) => false,
                     });
 
