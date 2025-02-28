@@ -469,7 +469,7 @@ version = "0.0.1"
                 );
             }
             _ => panic!("Expected error NoFixedVersion"),
-        };
+        }
     }
 
     #[test]

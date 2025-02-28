@@ -203,7 +203,7 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Bui
             variant: None,
             distros: vec![],
         });
-    };
+    }
     targets
 }
 
