@@ -418,7 +418,7 @@ jobs:
 
       - name: Create Pull Request
         id: pr
-        uses: peter-evans/create-pull-request@v7.0.6
+        uses: peter-evans/create-pull-request@v7.0.7
         with:
           token: ${{ steps.generate-token.outputs.token }}
           title: Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
