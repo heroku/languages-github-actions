@@ -88,11 +88,11 @@ jobs:
         env:
           RUST_TRIPLES: ${{ steps.generate-buildpack-matrix.outputs.rust_triples }}
         run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends musl-tools
           for triple in $(jq --exit-status -r '.[]' <<< "${RUST_TRIPLES}"); do
             if [[ "$triple" == "aarch64-unknown-linux-musl" ]]; then
-              sudo apt-get install musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross --no-install-recommends
-            elif [[ "$triple" == "x86_64-unknown-linux-musl" ]]; then
-              sudo apt-get install musl-tools --no-install-recommends
+              sudo apt-get install --no-install-recommends gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross
             fi
             rustup target add "$triple"
           done
