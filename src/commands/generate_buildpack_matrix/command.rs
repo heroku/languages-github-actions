@@ -203,7 +203,7 @@ fn read_buildpack_targets(buildpack_descriptor: &BuildpackDescriptor) -> Vec<Bui
             variant: None,
             distros: vec![],
         });
-    };
+    }
     targets
 }
 
@@ -264,11 +264,9 @@ fn target_output_dir(
         BuildpackType::Bash => target_name(target),
         _ => rust_triple(target)?,
     };
-    Ok(create_packaged_buildpack_dir_resolver(
-        package_dir,
-        CargoProfile::Release,
-        &target_dirname,
-    )(buildpack_id))
+    let buildpack_dir_resolver =
+        create_packaged_buildpack_dir_resolver(package_dir, CargoProfile::Release, &target_dirname);
+    Ok(buildpack_dir_resolver(buildpack_id))
 }
 
 fn buildpack_type(

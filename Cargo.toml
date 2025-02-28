@@ -1,6 +1,6 @@
 [package]
 name = "languages-github-actions"
-rust-version = "1.75"
+rust-version = "1.85"
 edition = "2021"
 # This crate isn't published to crates.io, however, we still need the version field here,
 # since it's updated to the real version as part of tagging/publishing to GitHub releases.
@@ -37,9 +37,9 @@ fastrand = "2"
 ignore = "0.4"
 indexmap = "2"
 lazy_static = "1"
-libcnb-common = "=0.26.1"
-libcnb-data = "=0.26.1"
-libcnb-package = "=0.26.1"
+libcnb-common = "=0.27.0"
+libcnb-data = "=0.27.0"
+libcnb-package = "=0.27.0"
 markdown = "1.0.0-alpha.23"
 regex = "1"
 semver = "1"
