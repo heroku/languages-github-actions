@@ -22,6 +22,10 @@ on:
         type: boolean
         default: false
         description: Flag used for testing purposes to prevent actions that perform publishing operations from executing
+      reviewers:
+        description: A comma separated list of GitHub usernames from whom cnb-builder-images PR review will be requested, overriding the CODEOWNERS default of the Languages team.
+        type: string
+        required: false
       ip_allowlisted_runner:
         description: The GitHub Actions runner to use to run jobs that require IP allow-list privileges
         type: string
@@ -427,6 +431,7 @@ jobs:
             Update ${{ github.repository }} to v${{ needs.compile.outputs.version }}
 
             ${{ needs.compile.outputs.changelog }}
+          reviewers: ${{ inputs.reviewers }}
           path: ./cnb-builder-images
           branch: update/${{ github.repository }}
           delete-branch: true
