@@ -50,6 +50,9 @@ on:
         required: true
         description: The token to login to Docker Hub with
 
+# Disable all GITHUB_TOKEN permissions, since the GitHub App token is used instead.
+permissions: {}
+
 defaults:
   run:
     # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
@@ -254,6 +257,9 @@ jobs:
         if: always()
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
+        # TODO: Consider using secret masking for the generated token here, or preferably
+        # switching to an approach that doesn't involve manually crafted curl requests.
+        # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log
         run: |
           dockerhub_token=$(curl -sS -f --retry 3 --retry-connrefused --connect-timeout 5 --max-time 30 -H "Content-Type: application/json" -X POST -d "{\"username\": \"${{ secrets.docker_hub_user }}\", \"password\": \"${{ secrets.docker_hub_token }}\"}" https://hub.docker.com/v2/users/login/ | jq --exit-status -r .token)
           namespace=$(cut -d "/" -f2 <<< "${{ matrix.image_repository }}")

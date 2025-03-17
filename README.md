@@ -58,6 +58,9 @@ on:
           - minor
           - patch
 
+# Disable all GITHUB_TOKEN permissions, since the GitHub App token is used instead.
+permissions: {}
+
 jobs:
   prepare-release:
     uses: heroku/languages-github-actions/.github/workflows/_buildpacks-prepare-release.yml@latest
@@ -115,6 +118,9 @@ name: Release Buildpacks
 
 on:
   workflow_dispatch:
+
+# Disable all GITHUB_TOKEN permissions, since the GitHub App token is used instead.
+permissions: {}
 
 jobs:
   release:
