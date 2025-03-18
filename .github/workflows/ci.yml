@@ -33,13 +33,13 @@ jobs:
         uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
 
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- --deny warnings
+        run: cargo clippy --all-targets --all-features --locked -- --deny warnings
 
       - name: rustfmt
         run: cargo fmt -- --check
 
       - name: Check docs
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features --document-private-items --no-deps
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features --document-private-items --no-deps --locked
 
   test:
     name: Test
@@ -55,4 +55,4 @@ jobs:
         uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
 
       - name: Test
-        run: cargo test --all-features
+        run: cargo test --all-features --locked
