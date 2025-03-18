@@ -58,7 +58,7 @@ jobs:
         uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
 
       - name: Install cargo-bump
-        run: cargo install cargo-bump
+        run: cargo install --locked cargo-bump
 
       - name: Get previous release version
         id: previous-version
@@ -72,13 +72,13 @@ jobs:
           cargo bump ${{ inputs.bump }}
 
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Get release metadata
         id: metadata
         run: |
-          echo "name=$(cargo metadata --format-version=1 --no-deps | jq --exit-status -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
-          echo "version=$(cargo metadata --format-version=1 --no-deps | jq --exit-status -r '.packages[-1].version')" >> $GITHUB_OUTPUT
+          echo "name=$(cargo metadata --format-version=1 --no-deps --locked | jq --exit-status -r '.packages[-1].targets[-1].name')" >> $GITHUB_OUTPUT
+          echo "version=$(cargo metadata --format-version=1 --no-deps --locked | jq --exit-status -r '.packages[-1].version')" >> $GITHUB_OUTPUT
 
       - name: Package binary
         id: package-binary
