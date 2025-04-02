@@ -72,7 +72,9 @@ jobs:
           cargo bump ${{ inputs.bump }}
 
       - name: Build
-        run: cargo build --release --locked
+        # Not using --locked since the lockfile will need updating for the version bump. The CI
+        # workflows for this repo will ensure the rest of the lockfile is up to date.
+        run: cargo build --release
 
       - name: Get release metadata
         id: metadata
