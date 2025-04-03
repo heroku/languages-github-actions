@@ -1,6 +1,5 @@
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use indexmap::IndexMap;
-use lazy_static::lazy_static;
 use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use regex::Regex;
@@ -9,6 +8,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
+use std::sync::LazyLock;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Changelog {
@@ -16,18 +16,18 @@ pub(crate) struct Changelog {
     pub(crate) releases: IndexMap<String, ReleaseEntry>,
 }
 
+static UNRELEASED_HEADER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^\[?unreleased]?$").expect("Should be a valid regex"));
+
+static VERSION_HEADER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\[?(\d+\.\d+\.\d+)]?.*(\d{4})[-/](\d{2})[-/](\d{2})")
+        .expect("Should be a valid regex")
+});
+
 impl TryFrom<&str> for Changelog {
     type Error = ChangelogError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        lazy_static! {
-            static ref UNRELEASED_HEADER: Regex =
-                Regex::new(r"(?i)^\[?unreleased]?$").expect("Should be a valid regex");
-            static ref VERSION_HEADER: Regex =
-                Regex::new(r"^\[?(\d+\.\d+\.\d+)]?.*(\d{4})[-/](\d{2})[-/](\d{2})")
-                    .expect("Should be a valid regex");
-        }
-
         let changelog_ast =
             to_mdast(value, &ParseOptions::default()).map_err(ChangelogError::Parse)?;
 
