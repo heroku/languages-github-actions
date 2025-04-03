@@ -305,7 +305,6 @@ dependencies = [
  "fastrand",
  "ignore",
  "indexmap",
- "lazy_static",
  "libcnb-common",
  "libcnb-data",
  "libcnb-package",
