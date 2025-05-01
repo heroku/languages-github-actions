@@ -39,7 +39,7 @@ indexmap = "2"
 libcnb-common = "=0.28.1"
 libcnb-data = "=0.28.1"
 libcnb-package = "=0.28.1"
-markdown = "1.0.0-alpha.23"
+markdown = "1.0.0"
 regex = "1"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
