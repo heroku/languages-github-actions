@@ -424,7 +424,7 @@ jobs:
         # image to exist in order to calculate a digest with `crane`. Adding the check here
         # means no files will be modified and so no PR will be created later.
         if: inputs.dry_run == false
-        run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./cnb-builder-images --builders builder-20,builder-22,builder-24,salesforce-functions
+        run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./cnb-builder-images --builders builder-22,builder-24,salesforce-functions
 
       - name: Create Pull Request
         id: pr
