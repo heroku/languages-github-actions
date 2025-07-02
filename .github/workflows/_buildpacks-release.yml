@@ -105,7 +105,7 @@ jobs:
           done
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
 
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
@@ -184,10 +184,10 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@c502bcff683efa6f6d56a325df3fbe1722e21881 # v5.8.11
+        uses: buildpacks/github-actions/setup-pack@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
 
       - name: Install Crane
-        uses: buildpacks/github-actions/setup-tools@c502bcff683efa6f6d56a325df3fbe1722e21881 # v5.8.11
+        uses: buildpacks/github-actions/setup-tools@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
 
       - name: Login to Docker Hub
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -312,7 +312,7 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@c502bcff683efa6f6d56a325df3fbe1722e21881 # v5.8.11
+        uses: buildpacks/github-actions/setup-pack@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
 
       - name: Generate CNB files
         run: |
@@ -340,7 +340,7 @@ jobs:
 
       - name: Create GitHub Release
         if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
         with:
           token: ${{ steps.generate-token.outputs.token }}
           tag_name: v${{ needs.compile.outputs.version }}
@@ -358,7 +358,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@c502bcff683efa6f6d56a325df3fbe1722e21881 # v5.8.11
+        uses: buildpacks/github-actions/setup-tools@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
 
       - name: Check if version is already in the registry
         id: check
@@ -376,7 +376,7 @@ jobs:
 
       - name: Register the new version with the CNB Buildpack Registry
         if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'
-        uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.8.5
+        uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.9.2
         with:
           token: ${{ secrets.cnb_registry_token }}
           id: ${{ matrix.buildpack_id }}
@@ -412,7 +412,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@c502bcff683efa6f6d56a325df3fbe1722e21881 # v5.8.11
+        uses: buildpacks/github-actions/setup-tools@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
