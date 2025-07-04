@@ -254,7 +254,7 @@ jobs:
           echo "- \`${{ matrix.stable_tag }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Unpublish temp tags from this run
-        if: always()
+        if: steps.check.outputs.published_to_docker == 'false'
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         # TODO: Consider using secret masking for the generated token here, or preferably
