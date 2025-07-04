@@ -198,10 +198,10 @@ jobs:
 
       - name: Check if version is already on Docker Hub
         id: check
-        run: echo "published_to_docker=$(docker manifest inspect "${{ matrix.stable_tag }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        run: echo "already_published_to_docker=$(docker manifest inspect "${{ matrix.stable_tag }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - name: Publish to temporary tags
-        if: steps.check.outputs.published_to_docker == 'false'
+        if: steps.check.outputs.already_published_to_docker == 'false'
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
@@ -237,7 +237,7 @@ jobs:
           fi
 
       - name: Promote temporary tags to stable tags
-        if: inputs.dry_run == false && steps.check.outputs.published_to_docker == 'false'
+        if: inputs.dry_run == false && steps.check.outputs.already_published_to_docker == 'false'
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         run: |
@@ -254,7 +254,7 @@ jobs:
           echo "- \`${{ matrix.stable_tag }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Unpublish temp tags from this run
-        if: always()
+        if: steps.check.outputs.already_published_to_docker == 'false'
         env:
           TARGETS: ${{ toJSON(matrix.targets) }}
         # TODO: Consider using secret masking for the generated token here, or preferably
@@ -336,10 +336,10 @@ jobs:
         id: check
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: echo "published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+        run: echo "already_published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: inputs.dry_run == false && steps.check.outputs.published_to_github == 'false'
+        if: inputs.dry_run == false && steps.check.outputs.already_published_to_github == 'false'
         uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
         with:
           token: ${{ steps.generate-token.outputs.token }}
@@ -365,9 +365,9 @@ jobs:
         run: |
           registry_url="https://registry.buildpacks.io/api/v1/buildpacks/${{ matrix.buildpack_id }}/${{ matrix.buildpack_version }}"
           if curl --head --silent --show-error --fail --retry 1 --retry-all-errors --connect-timeout 10 --max-time 60 "${registry_url}"; then
-            echo "published_to_cnb_registry=true" >> $GITHUB_OUTPUT
+            echo "already_published_to_cnb_registry=true" >> $GITHUB_OUTPUT
           else
-            echo "published_to_cnb_registry=false" >> $GITHUB_OUTPUT
+            echo "already_published_to_cnb_registry=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Calculate the buildpack image digest
@@ -375,7 +375,7 @@ jobs:
         run: echo "value=$(crane digest ${{ matrix.stable_tag }})" >> "$GITHUB_OUTPUT"
 
       - name: Register the new version with the CNB Buildpack Registry
-        if: inputs.dry_run == false && steps.check.outputs.published_to_cnb_registry == 'false'
+        if: inputs.dry_run == false && steps.check.outputs.already_published_to_cnb_registry == 'false'
         uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.9.2
         with:
           token: ${{ secrets.cnb_registry_token }}
