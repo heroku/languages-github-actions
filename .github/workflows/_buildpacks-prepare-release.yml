@@ -108,6 +108,10 @@ jobs:
           committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
           author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
 
+      - name: PR link for GitHub summary
+        if: ${{ steps.pr.outputs.pull-request-number }}
+        run: echo '## PR [#${{ steps.pr.outputs.pull-request-number }}](${{ steps.pr.outputs.pull-request-url }}) ${{ steps.pr.outputs.pull-request-operation }}' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Configure pull request
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash "${{ steps.pr.outputs.pull-request-number }}"
