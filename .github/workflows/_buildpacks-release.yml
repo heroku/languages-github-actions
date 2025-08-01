@@ -184,10 +184,10 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
+        uses: buildpacks/github-actions/setup-pack@8203df0b7ac31e358daa391b1949da5650e7f4f0 # v5.9.3
 
       - name: Install Crane
-        uses: buildpacks/github-actions/setup-tools@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
+        uses: buildpacks/github-actions/setup-tools@8203df0b7ac31e358daa391b1949da5650e7f4f0 # v5.9.3
 
       - name: Login to Docker Hub
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -312,7 +312,7 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
+        uses: buildpacks/github-actions/setup-pack@8203df0b7ac31e358daa391b1949da5650e7f4f0 # v5.9.3
 
       - name: Generate CNB files
         run: |
@@ -358,7 +358,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
+        uses: buildpacks/github-actions/setup-tools@8203df0b7ac31e358daa391b1949da5650e7f4f0 # v5.9.3
 
       - name: Check if version is already in the registry
         id: check
@@ -412,7 +412,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@bc04fbfd78e903050bab17a2dcf907e71e3c4afa # v5.9.2
+        uses: buildpacks/github-actions/setup-tools@8203df0b7ac31e358daa391b1949da5650e7f4f0 # v5.9.3
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
