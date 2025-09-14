@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::{io, iter};
 
 pub(crate) fn set_summary<M: Into<String>>(markdown: M) -> Result<(), WriteActionDataError> {

@@ -1,5 +1,5 @@
 use crate::buildpacks::find_releasable_buildpacks;
-use crate::changelog::{generate_release_declarations, Changelog, ReleaseEntry};
+use crate::changelog::{Changelog, ReleaseEntry, generate_release_declarations};
 use crate::commands::prepare_release::errors::Error;
 use crate::github::actions;
 use chrono::{DateTime, Utc};
@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use toml_edit::{value, ArrayOfTables, DocumentMut, Table};
+use toml_edit::{ArrayOfTables, DocumentMut, Table, value};
 use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -388,8 +388,8 @@ fn merge_existing_changelog_entries_with_dependency_changes(
 mod test {
     use crate::changelog::{Changelog, ReleaseEntry};
     use crate::commands::prepare_release::command::{
-        get_fixed_version, promote_changelog_unreleased_to_version,
-        update_buildpack_contents_with_new_version, BuildpackFile,
+        BuildpackFile, get_fixed_version, promote_changelog_unreleased_to_version,
+        update_buildpack_contents_with_new_version,
     };
     use crate::commands::prepare_release::errors::Error;
     use chrono::{TimeZone, Utc};
@@ -775,8 +775,8 @@ optional = true
     }
 
     #[test]
-    fn test_promote_changelog_unreleased_to_version_with_changed_entries_is_merged_with_updated_dependencies(
-    ) {
+    fn test_promote_changelog_unreleased_to_version_with_changed_entries_is_merged_with_updated_dependencies()
+     {
         let changelog = Changelog {
             unreleased: Some(
                 r"

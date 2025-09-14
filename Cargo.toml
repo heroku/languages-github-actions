@@ -1,7 +1,7 @@
 [package]
 name = "languages-github-actions"
-rust-version = "1.85"
-edition = "2021"
+rust-version = "1.89"
+edition = "2024"
 # This crate isn't published to crates.io, however, we still need the version field here,
 # since it's updated to the real version as part of tagging/publishing to GitHub releases.
 version = "0.0.0"

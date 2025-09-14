@@ -1,4 +1,4 @@
-use libcnb_common::toml_file::{read_toml_file, TomlFileError};
+use libcnb_common::toml_file::{TomlFileError, read_toml_file};
 use libcnb_data::buildpack::BuildpackDescriptor;
 use libcnb_package::find_buildpack_dirs;
 use std::path::{Path, PathBuf};
