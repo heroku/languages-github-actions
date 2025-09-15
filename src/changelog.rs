@@ -1,7 +1,7 @@
 use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use indexmap::IndexMap;
 use markdown::mdast::Node;
-use markdown::{to_mdast, ParseOptions};
+use markdown::{ParseOptions, to_mdast};
 use regex::Regex;
 use semver::Version;
 use std::cmp::Ordering;
@@ -104,7 +104,9 @@ impl TryFrom<&str> for Changelog {
                         .parse::<u32>()
                         .map_err(ChangelogError::ParseReleaseEntryDay)?;
                     let date = match Utc.with_ymd_and_hms(year, month, day, 0, 0, 0) {
-                        LocalResult::None => Err(ChangelogError::InvalidReleaseDate(format!("Could not convert year: {year}, month: {month}, day: {day} into a valid date from {header:?}"))),
+                        LocalResult::None => Err(ChangelogError::InvalidReleaseDate(format!(
+                            "Could not convert year: {year}, month: {month}, day: {day} into a valid date from {header:?}"
+                        ))),
                         LocalResult::Single(value) => Ok(value),
                         LocalResult::Ambiguous(_, _) => Err(ChangelogError::AmbiguousReleaseDate),
                     }?;
@@ -240,7 +242,7 @@ pub(crate) fn generate_release_declarations<S: Into<String>>(
 
 #[cfg(test)]
 mod test {
-    use crate::changelog::{generate_release_declarations, Changelog};
+    use crate::changelog::{Changelog, generate_release_declarations};
     use chrono::{TimeZone, Utc};
     use semver::{BuildMetadata, Prerelease, Version};
 

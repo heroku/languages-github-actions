@@ -9,7 +9,7 @@ use libcnb_data::buildpack::{BuildpackId, BuildpackVersion};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use toml_edit::{value, ArrayOfTables, DocumentMut, Item};
+use toml_edit::{ArrayOfTables, DocumentMut, Item, value};
 use uriparse::URI;
 
 type Result<T> = std::result::Result<T, Error>;

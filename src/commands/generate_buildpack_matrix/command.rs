@@ -7,10 +7,10 @@ use crate::github::actions;
 use clap::Parser;
 use libcnb_data::buildpack::{BuildpackDescriptor, BuildpackId, BuildpackTarget};
 use libcnb_data::generic::GenericMetadata;
+use libcnb_package::CargoProfile;
 use libcnb_package::output::{
     create_packaged_buildpack_dir_resolver, default_buildpack_directory_name,
 };
-use libcnb_package::CargoProfile;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -332,7 +332,7 @@ mod tests {
     use crate::commands::generate_buildpack_matrix::command::BuildpackType;
     use libcnb_data::buildpack::BuildpackDescriptor;
     use std::{
-        fs::{create_dir_all, OpenOptions},
+        fs::{OpenOptions, create_dir_all},
         path::PathBuf,
     };
     use tempfile::tempdir;

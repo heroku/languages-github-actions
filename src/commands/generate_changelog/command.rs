@@ -105,7 +105,7 @@ fn generate_changelog(changes_by_buildpack: &HashMap<BuildpackId, ChangelogEntry
 
 #[cfg(test)]
 mod test {
-    use crate::commands::generate_changelog::command::{generate_changelog, ChangelogEntry};
+    use crate::commands::generate_changelog::command::{ChangelogEntry, generate_changelog};
     use libcnb_data::buildpack_id;
     use std::collections::HashMap;
 
