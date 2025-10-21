@@ -91,6 +91,13 @@ jobs:
       - name: Update Rust toolchain
         run: rustup update
 
+      # The dpkg man-db trigger is excessively slow on GHA runners, see e.g.:
+      # https://github.com/actions/runner-images/issues/10977
+      # https://github.com/actions/runner/issues/4030
+      # We disable it here so it does not fire at the end of the following apt-get install
+      - name: Disable man-db auto-update
+        run: sudo rm -f /var/lib/man-db/auto-update
+
       - name: Install cross-compile tooling
         env:
           RUST_TRIPLES: ${{ steps.generate-buildpack-matrix.outputs.rust_triples }}
