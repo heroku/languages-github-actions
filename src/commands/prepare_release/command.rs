@@ -419,7 +419,7 @@ version = "0.0.0"
 "#,
         );
         assert_eq!(
-            get_fixed_version(&vec![buildpack_a, buildpack_b]).unwrap(),
+            get_fixed_version(&[buildpack_a, buildpack_b]).unwrap(),
             BuildpackVersion {
                 major: 0,
                 minor: 0,
@@ -444,7 +444,7 @@ id = "b"
 version = "0.0.1"
 "#,
         );
-        match get_fixed_version(&vec![buildpack_a, buildpack_b]).unwrap_err() {
+        match get_fixed_version(&[buildpack_a, buildpack_b]).unwrap_err() {
             Error::NotAllVersionsMatch(version_map) => {
                 assert_eq!(
                     HashMap::from([
