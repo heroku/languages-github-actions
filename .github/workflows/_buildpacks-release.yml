@@ -191,10 +191,10 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@f6d0ae15b2e1f021664bf3ee3fc4f9105c1ee4c7 # v5.9.4
+        uses: buildpacks/github-actions/setup-pack@2d58ee348f9a2c381888bfe3dfe99caffdddc84f # v5.9.6
 
       - name: Install Crane
-        uses: buildpacks/github-actions/setup-tools@f6d0ae15b2e1f021664bf3ee3fc4f9105c1ee4c7 # v5.9.4
+        uses: buildpacks/github-actions/setup-tools@2d58ee348f9a2c381888bfe3dfe99caffdddc84f # v5.9.6
 
       - name: Login to Docker Hub
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
@@ -319,7 +319,7 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@f6d0ae15b2e1f021664bf3ee3fc4f9105c1ee4c7 # v5.9.4
+        uses: buildpacks/github-actions/setup-pack@2d58ee348f9a2c381888bfe3dfe99caffdddc84f # v5.9.6
 
       - name: Generate CNB files
         run: |
@@ -347,7 +347,7 @@ jobs:
 
       - name: Create GitHub Release
         if: inputs.dry_run == false && steps.check.outputs.already_published_to_github == 'false'
-        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
         with:
           token: ${{ steps.generate-token.outputs.token }}
           tag_name: v${{ needs.compile.outputs.version }}
@@ -365,7 +365,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@f6d0ae15b2e1f021664bf3ee3fc4f9105c1ee4c7 # v5.9.4
+        uses: buildpacks/github-actions/setup-tools@2d58ee348f9a2c381888bfe3dfe99caffdddc84f # v5.9.6
 
       - name: Check if version is already in the registry
         id: check
@@ -419,7 +419,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@f6d0ae15b2e1f021664bf3ee3fc4f9105c1ee4c7 # v5.9.4
+        uses: buildpacks/github-actions/setup-tools@2d58ee348f9a2c381888bfe3dfe99caffdddc84f # v5.9.6
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
