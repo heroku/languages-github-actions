@@ -476,7 +476,7 @@ dependencies = [
  "fastrand",
  "ignore",
  "indexmap",
- "libcnb-common",
+ "libcnb-common 0.30.2",
  "libcnb-data",
  "libcnb-package",
  "markdown",
@@ -515,6 +515,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libcnb-common"
+version = "0.30.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc87f4bc36bb1b1c288675164a431029af30e1aaf7377c8e6254517a921fa60c"
+dependencies = [
+ "serde",
+ "thiserror",
+ "toml 0.9.8",
+]
+
+[[package]]
 name = "libcnb-data"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -537,7 +548,7 @@ dependencies = [
  "cargo_metadata",
  "ignore",
  "indoc",
- "libcnb-common",
+ "libcnb-common 0.29.1",
  "libcnb-data",
  "petgraph",
  "thiserror",
