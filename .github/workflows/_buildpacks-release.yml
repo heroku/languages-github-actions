@@ -74,7 +74,7 @@ jobs:
       changelog: ${{ steps.generate-changelog.outputs.changelog }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: true
 
@@ -177,7 +177,7 @@ jobs:
       # don't need this step, so it's skipped where possible.
       - name: Checkout
         if: matrix.buildpack_type == 'composite'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: true
 
@@ -305,7 +305,7 @@ jobs:
       # the buildpacks in this repo meet this criteria, and this step is
       # reasonably fast, it is always run.
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: true
 
@@ -405,12 +405,12 @@ jobs:
           repositories: cnb-builder-images
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           path: ./buildpacks
 
       - name: Checkout cnb-builder-images repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: heroku/cnb-builder-images
           path: ./cnb-builder-images
