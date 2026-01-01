@@ -157,7 +157,7 @@ jobs:
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
 
       - name: Cache buildpacks
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
           path: ${{ env.PACKAGE_DIR }}
@@ -182,7 +182,7 @@ jobs:
           submodules: true
 
       - name: Restore buildpacks
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
@@ -310,7 +310,7 @@ jobs:
           submodules: true
 
       - name: Restore buildpacks
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-compiled-buildpacks
