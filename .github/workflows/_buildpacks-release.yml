@@ -1,5 +1,4 @@
 name: _buildpacks-release
-
 on:
   workflow_call:
     inputs:
@@ -49,21 +48,17 @@ on:
       docker_hub_token:
         required: true
         description: The token to login to Docker Hub with
-
 # Disable all GITHUB_TOKEN permissions, since the GitHub App token is used instead.
 permissions: {}
-
 defaults:
   run:
     # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
     # rather than only error on exit (improving failure UX when pipes are used). See:
     # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
     shell: bash
-
 env:
   CARGO_TERM_COLOR: always
   PACKAGE_DIR: ./packaged
-
 jobs:
   compile:
     name: Compile Buildpacks
@@ -77,27 +72,22 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: true
-
       - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@v1.3.0
         with:
           branch: ${{ inputs.languages_cli_branch }}
           update_rust_toolchain: false
-
       - name: Generate buildpack matrix
         id: generate-buildpack-matrix
         run: actions generate-buildpack-matrix --temporary-id "${{ github.run_id }}" --package-dir "${{ env.PACKAGE_DIR }}"
-
       - name: Update Rust toolchain
         run: rustup update
-
       # The dpkg man-db trigger is excessively slow on GHA runners, see e.g.:
       # https://github.com/actions/runner-images/issues/10977
       # https://github.com/actions/runner/issues/4030
       # We disable it here so it does not fire at the end of the following apt-get install
       - name: Disable man-db auto-update
         run: sudo rm -f /var/lib/man-db/auto-update
-
       - name: Install cross-compile tooling
         env:
           RUST_TRIPLES: ${{ steps.generate-buildpack-matrix.outputs.rust_triples }}
@@ -110,10 +100,8 @@ jobs:
             fi
             rustup target add "$triple"
           done
-
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
       - name: Install libcnb-cargo
@@ -124,7 +112,6 @@ jobs:
             | yq -ptoml -oyaml '.package[] | select(.name == "libcnb-package") | .version' \
           )
           cargo install --locked "libcnb-cargo@${LIBCNB_PACKAGE_VERSION}"
-
       - name: Package buildpacks
         id: libcnb-package
         env:
@@ -151,17 +138,14 @@ jobs:
               sed -r -i "s/(docker:\/\/.+:[0-9.]+)/\0_${os}-${arch}/" "${output_dir}/package.toml"
             done
           done
-
       - name: Generate changelog
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
-
       - name: Cache buildpacks
         uses: actions/cache/save@v5
         with:
           key: ${{ github.run_id }}-compiled-buildpacks
           path: ${{ env.PACKAGE_DIR }}
-
   publish-docker:
     name: Publish → Docker - ${{ matrix.buildpack_id }}
     needs: [compile]
@@ -180,7 +164,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: true
-
       - name: Restore buildpacks
         uses: actions/cache/restore@v5
         with:
@@ -189,24 +172,19 @@ jobs:
           path: ${{ env.PACKAGE_DIR }}
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
-
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@04ab0323472d0da53769093d940a4956477636a2 # v5.10.0
-
       - name: Install Crane
         uses: buildpacks/github-actions/setup-tools@04ab0323472d0da53769093d940a4956477636a2 # v5.10.0
-
       - name: Login to Docker Hub
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
           password: ${{ secrets.docker_hub_token }}
-
       - name: Check if version is already on Docker Hub
         id: check
         run: echo "already_published_to_docker=$(docker manifest inspect "${{ matrix.stable_tag }}" &> /dev/null && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-
       - name: Publish to temporary tags
         if: steps.check.outputs.already_published_to_docker == 'false'
         env:
@@ -242,7 +220,6 @@ jobs:
             digest=$(crane digest "${{ matrix.temporary_tag }}")
             echo -e "- \`${{ matrix.temporary_tag }}\`\n  - \`${digest}\`" >> $GITHUB_STEP_SUMMARY
           fi
-
       - name: Promote temporary tags to stable tags
         if: inputs.dry_run == false && steps.check.outputs.already_published_to_docker == 'false'
         env:
@@ -259,7 +236,6 @@ jobs:
           # promote primary image manifest or manifest list to permanent tag
           crane copy "${{ matrix.temporary_tag }}" "${{ matrix.stable_tag }}"
           echo "- \`${{ matrix.stable_tag }}\`" >> $GITHUB_STEP_SUMMARY
-
       - name: Unpublish temp tags from this run
         if: steps.check.outputs.already_published_to_docker == 'false'
         env:
@@ -292,7 +268,6 @@ jobs:
             fi
           done
           exit $status
-
   publish-github:
     name: Publish → GitHub Release
     needs: [compile]
@@ -308,7 +283,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: true
-
       - name: Restore buildpacks
         uses: actions/cache/restore@v5
         with:
@@ -317,10 +291,8 @@ jobs:
           path: ${{ env.PACKAGE_DIR }}
         env:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
-
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@04ab0323472d0da53769093d940a4956477636a2 # v5.10.0
-
       - name: Generate CNB files
         run: |
           for buildpack in $(jq --exit-status -c '.[]' <<< '${{ needs.compile.outputs.buildpacks }}'); do
@@ -331,20 +303,17 @@ jobs:
               pack buildpack package "$cnb_file" --target "${oci_target}" --config "${output_dir}/package.toml" --format file --verbose
             done
           done
-
       - name: Get token for GitHub application (Linguist)
         uses: actions/create-github-app-token@v2
         id: generate-token
         with:
           app-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
-
       - name: Check if release exists
         id: check
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: echo "already_published_to_github=$(gh release view v${{ needs.compile.outputs.version }} -R ${{ github.repository }} &> /dev/null && echo "true" || echo "false")" >> $GITHUB_OUTPUT
-
       - name: Create GitHub Release
         if: inputs.dry_run == false && steps.check.outputs.already_published_to_github == 'false'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
@@ -354,7 +323,6 @@ jobs:
           body: ${{ needs.compile.outputs.changelog }}
           files: "*.cnb"
           fail_on_unmatched_files: true
-
   publish-cnb-registry:
     name: Publish → CNB Registry - ${{ matrix.buildpack_id }}
     needs: [compile, publish-docker]
@@ -366,7 +334,6 @@ jobs:
     steps:
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@04ab0323472d0da53769093d940a4956477636a2 # v5.10.0
-
       - name: Check if version is already in the registry
         id: check
         run: |
@@ -376,11 +343,9 @@ jobs:
           else
             echo "already_published_to_cnb_registry=false" >> $GITHUB_OUTPUT
           fi
-
       - name: Calculate the buildpack image digest
         id: digest
         run: echo "value=$(crane digest ${{ matrix.stable_tag }})" >> "$GITHUB_OUTPUT"
-
       - name: Register the new version with the CNB Buildpack Registry
         if: inputs.dry_run == false && steps.check.outputs.already_published_to_cnb_registry == 'false'
         uses: docker://ghcr.io/buildpacks/actions/registry/request-add-entry:5.9.4
@@ -389,7 +354,6 @@ jobs:
           id: ${{ matrix.buildpack_id }}
           version: ${{ matrix.buildpack_version }}
           address: ${{ matrix.image_repository }}@${{ steps.digest.outputs.value }}
-
   update-builder:
     name: Update Builder
     needs: [compile, publish-docker, publish-cnb-registry, publish-github]
@@ -403,12 +367,10 @@ jobs:
           private-key: ${{ secrets.app_private_key }}
           owner: heroku
           repositories: cnb-builder-images
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
           path: ./buildpacks
-
       - name: Checkout cnb-builder-images repository
         uses: actions/checkout@v6
         with:
@@ -417,22 +379,18 @@ jobs:
           # Using the GH application token here will configure the local git config for this repo with credentials
           # that can be used to make signed commits that are attributed to the GH application user
           token: ${{ steps.generate-token.outputs.token }}
-
       - name: Install crane
         uses: buildpacks/github-actions/setup-tools@04ab0323472d0da53769093d940a4956477636a2 # v5.10.0
-
       - name: Install Languages CLI
-        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
+        uses: heroku/languages-github-actions/.github/actions/install-languages-cli@v1.3.0
         with:
           branch: ${{ inputs.languages_cli_branch }}
-
       - name: Update Builder
         # The dry run check is performed here because the update process requires a published
         # image to exist in order to calculate a digest with `crane`. Adding the check here
         # means no files will be modified and so no PR will be created later.
         if: inputs.dry_run == false
         run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./cnb-builder-images --builders builder-22,builder-24
-
       - name: Create Pull Request
         id: pr
         uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8.0.0
@@ -451,7 +409,6 @@ jobs:
           # This will ensure commits made from this workflow are attributed to the GH application user
           committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
           author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
-
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
         run: gh pr merge --auto --squash --repo heroku/cnb-builder-images "${{ steps.pr.outputs.pull-request-number }}"

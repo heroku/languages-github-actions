@@ -4,7 +4,7 @@ rust-version = "1.89"
 edition = "2024"
 # This crate isn't published to crates.io, however, we still need the version field here,
 # since it's updated to the real version as part of tagging/publishing to GitHub releases.
-version = "0.0.0"
+version = "1.3.0"
 publish = false
 
 [[bin]]
