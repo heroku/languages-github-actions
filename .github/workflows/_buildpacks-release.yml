@@ -155,6 +155,11 @@ jobs:
                     rm -rf "${temp_dir}"
                 fi
 
+                # Create package.toml if it is missing
+                if [[ ! -f "${output_dir}/package.toml" ]]; then
+                    printf "[buildpack]\nuri = \".\"\n" > "${output_dir}/package.toml"
+                fi
+
                 continue
               fi
               echo "Packaging ${buildpack_dir}."
