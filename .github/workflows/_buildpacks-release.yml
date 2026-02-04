@@ -236,8 +236,9 @@ jobs:
           # Publish each target to a temp tag
           for i in "${!target_temp_tags[@]}"; do
             output_dir=$(jq --exit-status -r ".[$i].output_dir" <<< "${TARGETS}")
-            echo "Packaging ${output_dir} into ${target_temp_tags[i]}"
-            pack buildpack package "${target_temp_tags[i]}" --config "${output_dir}/package.toml" -v --publish
+            oci_target=$(jq --exit-status -r ".[$i].oci_target" <<< "${TARGETS}")
+            echo "Packaging ${output_dir} for ${oci_target} into ${target_temp_tags[i]}"
+            pack buildpack package "${target_temp_tags[i]}" --target "${oci_target}" --config "${output_dir}/package.toml" -v --publish
             digest=$(crane digest "${target_temp_tags[i]}")
             echo -e "- \`${target_temp_tags[i]}\`\n  - \`${digest}\`" >> $GITHUB_STEP_SUMMARY
           done
