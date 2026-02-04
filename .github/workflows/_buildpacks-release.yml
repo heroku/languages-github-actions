@@ -249,14 +249,6 @@ jobs:
             # create a manifest list using platform-specific images created above.
             docker manifest create "${{ matrix.temporary_tag }}" "${target_temp_tags[@]}"
 
-            # annotate each of the manifest list entries with the correct os/arch
-            for i in "${!target_temp_tags[@]}"; do
-              os=$(jq --exit-status -r ".[$i].os" <<< "${TARGETS}")
-              arch=$(jq --exit-status -r ".[$i].arch" <<< "${TARGETS}")
-              echo "Annotating ${{ matrix.temporary_tag }} / ${target_temp_tags[i]} with ${os}/${arch}"
-              docker manifest annotate "${{ matrix.temporary_tag }}" "${target_temp_tags[i]}" --os "${os}" --arch "${arch}"
-            done
-
             # Push the manifest list / image index to a temporary tag
             docker manifest push "${{ matrix.temporary_tag }}"
             digest=$(crane digest "${{ matrix.temporary_tag }}")
