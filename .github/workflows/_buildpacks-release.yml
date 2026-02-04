@@ -139,8 +139,27 @@ jobs:
               output_dir=$(jq --exit-status -r '.output_dir' <<< "${target}")
               if [[ "$buildpack_type" == "bash" ]]; then
                 echo "Copying bash buildpack from ${buildpack_dir} to ${output_dir}."
-                mkdir -p $(dirname "$output_dir")
-                cp -R "$buildpack_dir" "$output_dir"
+
+                # Stage buildpack files in a temp directory
+                temp_dir="$(mktemp -d)"
+                cp -R "${buildpack_dir}/." "${temp_dir}"
+
+                # Create destination parent directory
+                mkdir -p "$(dirname "${output_dir}")"
+
+                # Move or copy staged files to the final destination
+                if [[ ! -d "${output_dir}" ]]; then
+                    mv "${temp_dir}" "${output_dir}"
+                else
+                    cp -R "${temp_dir}/." "${output_dir}/"
+                    rm -rf "${temp_dir}"
+                fi
+
+                # Create package.toml if it is missing
+                if [[ ! -f "${output_dir}/package.toml" ]]; then
+                    printf "[buildpack]\nuri = \".\"\n" > "${output_dir}/package.toml"
+                fi
+
                 continue
               fi
               echo "Packaging ${buildpack_dir}."
