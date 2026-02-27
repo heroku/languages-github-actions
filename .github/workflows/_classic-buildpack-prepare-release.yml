@@ -7,6 +7,13 @@ on:
         description: An additional command to run before changes are committed, which can make use of the env vars EXISTING_VERSION and NEW_VERSION.
         type: string
         required: false
+    outputs:
+      from_version:
+        description: "The existing latest buildpack version"
+        value: ${{ jobs.prepare-release.outputs.from_version }}
+      to_version:
+        description: "The newly prepared buildpack version"
+        value: ${{ jobs.prepare-release.outputs.to_version }}
 
 # Disable all GITHUB_TOKEN permissions, since the GitHub App token is used instead.
 permissions: {}
@@ -22,6 +29,9 @@ jobs:
   prepare-release:
     name: Prepare Release
     runs-on: pub-hk-ubuntu-24.04-ip
+    outputs:
+      from_version: ${{ steps.existing-version.outputs.version }}
+      to_version: ${{ steps.new-version.outputs.version }}
     steps:
       # We use our GitHub App's access token instead of GITHUB_TOKEN since otherwise other
       # workflows (such as CI) won't automatically run on any PRs opened by this workflow:
