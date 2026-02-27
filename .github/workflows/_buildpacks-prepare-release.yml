@@ -37,6 +37,13 @@ on:
         type: string
         required: false
         default: main
+    outputs:
+      from_version:
+        description: "The existing latest buildpack version"
+        value: ${{ jobs.prepare-release.outputs.from_version }}
+      to_version:
+        description: "The newly prepared buildpack version"
+        value: ${{ jobs.prepare-release.outputs.to_version }}
     secrets:
       app_private_key:
         description: Private key of GitHub application (Linguist)
@@ -59,6 +66,9 @@ jobs:
   prepare-release:
     name: Prepare Release
     runs-on: ${{ inputs.ip_allowlisted_runner }}
+    outputs:
+      from_version: ${{ steps.prepare.outputs.from_version }}
+      to_version: ${{ steps.prepare.outputs.to_version }}}
     steps:
       - name: Get token for GH application (Linguist)
         uses: actions/create-github-app-token@v2
