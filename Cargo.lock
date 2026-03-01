@@ -73,6 +73,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-platform"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87a0c0e6148f11f01f32650a2ea02d532b2ad4e81d8bd41e6e565b5adc5e6082"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "cargo-util-schemas"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -95,8 +105,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cfca2aaa699835ba88faf58a06342a314a950d2b9686165e038286c30316868"
 dependencies = [
  "camino",
- "cargo-platform",
+ "cargo-platform 0.2.0",
  "cargo-util-schemas",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef987d17b0a113becdd19d3d0022d04d7ef41f9efe4f3fb63ac44ba61df3ade9"
+dependencies = [
+ "camino",
+ "cargo-platform 0.3.2",
  "semver",
  "serde",
  "serde_json",
@@ -467,8 +491,8 @@ dependencies = [
  "fastrand",
  "ignore",
  "indexmap",
- "libcnb-common 0.30.2",
- "libcnb-data",
+ "libcnb-common",
+ "libcnb-data 0.29.1",
  "libcnb-package",
  "markdown",
  "regex",
@@ -496,17 +520,6 @@ checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
 name = "libcnb-common"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ac5c3a0e7fdcf4d24023b79d5bf0bb57b8f4597859022451d9c1a20fc9ed608"
-dependencies = [
- "serde",
- "thiserror",
- "toml 0.9.11+spec-1.1.0",
-]
-
-[[package]]
-name = "libcnb-common"
 version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc87f4bc36bb1b1c288675164a431029af30e1aaf7377c8e6254517a921fa60c"
@@ -523,7 +536,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cff833e77e155d0ee3178abe4beed99fcabb8a59092aebc5d2f12958a2052db"
 dependencies = [
  "fancy-regex",
- "libcnb-proc-macros",
+ "libcnb-proc-macros 0.29.1",
+ "serde",
+ "thiserror",
+ "toml 0.9.11+spec-1.1.0",
+ "uriparse",
+]
+
+[[package]]
+name = "libcnb-data"
+version = "0.30.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9586f2f9194d48fae1cbe5c615484f3621ed454a760e4f3f7f71cce992ba3825"
+dependencies = [
+ "fancy-regex",
+ "libcnb-proc-macros 0.30.2",
  "serde",
  "thiserror",
  "toml 0.9.11+spec-1.1.0",
@@ -532,15 +559,15 @@ dependencies = [
 
 [[package]]
 name = "libcnb-package"
-version = "0.29.1"
+version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81a5e82f8986125313e0891df0e633c79834f7c10835d441d22bc684be757952"
+checksum = "529d326aab6b3dd58b0449e6534e3b7dd12ec4aeb0cdaaa34763350d4a245470"
 dependencies = [
- "cargo_metadata",
+ "cargo_metadata 0.23.1",
  "ignore",
  "indoc",
- "libcnb-common 0.29.1",
- "libcnb-data",
+ "libcnb-common",
+ "libcnb-data 0.30.2",
  "petgraph",
  "thiserror",
  "uriparse",
@@ -553,7 +580,19 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f71aaae924ba3b27632124a18b13949722c07cf7cb2acd6c541c47e717f943ef"
 dependencies = [
- "cargo_metadata",
+ "cargo_metadata 0.21.0",
+ "fancy-regex",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "libcnb-proc-macros"
+version = "0.30.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b842199b2972328aefd33eb2c8516e7c6886425009544d1781e6b49059200ea3"
+dependencies = [
+ "cargo_metadata 0.23.1",
  "fancy-regex",
  "quote",
  "syn",
