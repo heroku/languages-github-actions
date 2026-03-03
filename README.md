@@ -82,6 +82,13 @@ jobs:
 | `ip_allowlisted_runner`         | The GitHub Actions runner to use to run jobs that require IP allow-list privileges                                                                                                                      | false    | `pub-hk-ubuntu-24.04-ip` |
 | `languages_cli_branch`          | The branch to install the Languages CLI from (FOR TESTING)                                                                                                                                              | false    | `main`                   |
 
+#### Outputs
+
+| Name           | Description                                        |
+|----------------|----------------------------------------------------|
+| `from_version` | The version number of the existing latest release. |
+| `to_version`   | The version number of the newly prepared release.  |
+
 #### Secrets
 
 | Name              | Description                                  | Required |
@@ -186,6 +193,13 @@ jobs:
 | `custom_update_command` | An additional command to run before changes are committed, which can make use of the env vars EXISTING_VERSION and NEW_VERSION | false    |         |
 
 In addition, the workflow requires that the `LINGUIST_*` env vars are available (which are set as organization variables).
+
+#### Outputs
+
+| Name           | Description                                        |
+|----------------|----------------------------------------------------|
+| `from_version` | The version number of the existing latest release. |
+| `to_version`   | The version number of the newly prepared release.  |
 
 #### Secrets
 
