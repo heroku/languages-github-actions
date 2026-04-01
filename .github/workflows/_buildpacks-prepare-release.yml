@@ -71,7 +71,7 @@ jobs:
       to_version: ${{ steps.prepare.outputs.to_version }}}
     steps:
       - name: Get token for GH application (Linguist)
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: generate-token
         with:
           app-id: ${{ inputs.app_id }}
