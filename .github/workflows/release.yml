@@ -126,9 +126,8 @@ jobs:
 
       - name: Create release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
-        env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         with:
+          token: ${{ steps.generate-token.outputs.token }}
           target_commitish: ${{ steps.release-tag.outputs.sha }}
           tag_name: v${{ steps.metadata.outputs.version }}
           files: ${{ steps.package-binary.outputs.path }}
