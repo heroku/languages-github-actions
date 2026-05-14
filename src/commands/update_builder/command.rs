@@ -121,8 +121,8 @@ fn update_builder_with_buildpack_info(
             let matches_id = buildpack
                 .get("id")
                 .and_then(Item::as_str)
-                .filter(|value| value == &buildpack_id.as_str())
-                .is_some();
+                .as_ref()
+                .is_some_and(|value| value == &buildpack_id.as_str());
             if matches_id {
                 buildpack["uri"] = value(buildpack_uri_with_sha.to_string());
             }
@@ -143,8 +143,8 @@ fn update_builder_with_buildpack_info(
             let matches_id = group
                 .get("id")
                 .and_then(Item::as_str)
-                .filter(|value| value == &buildpack_id.as_str())
-                .is_some();
+                .as_ref()
+                .is_some_and(|value| value == &buildpack_id.as_str());
             if matches_id {
                 group["version"] = value(buildpack_version.to_string());
             }
