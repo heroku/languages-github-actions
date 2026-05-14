@@ -73,6 +73,24 @@ jobs:
       version: ${{ steps.generate-buildpack-matrix.outputs.version }}
       changelog: ${{ steps.generate-changelog.outputs.changelog }}
     steps:
+      - name: Get token for prepare PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/create-github-app-token@v3
+        id: comment-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
+      - name: Notify release started on prepare PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ steps.comment-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Release workflow started: $RUN_URL"
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -367,6 +385,16 @@ jobs:
           files: "*.cnb"
           fail_on_unmatched_files: true
 
+      - name: Notify GitHub release published on prepare PR
+        if: github.event_name == 'pull_request' && inputs.dry_run == false
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.compile.outputs.version }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "GitHub release published: $RELEASE_URL"
+
   publish-cnb-registry:
     name: Publish → CNB Registry - ${{ matrix.buildpack_id }}
     needs: [compile, publish-docker]
@@ -469,3 +497,21 @@ jobs:
         run: gh pr merge --auto --squash --repo heroku/cnb-builder-images "${{ steps.pr.outputs.pull-request-number }}"
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+      - name: Get token for prepare PR comment
+        if: github.event_name == 'pull_request' && inputs.dry_run == false && steps.pr.outputs.pull-request-operation == 'created'
+        uses: actions/create-github-app-token@v3
+        id: comment-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
+      - name: Notify builder PR opened on prepare PR
+        if: github.event_name == 'pull_request' && inputs.dry_run == false && steps.pr.outputs.pull-request-operation == 'created'
+        env:
+          GH_TOKEN: ${{ steps.comment-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BUILDER_PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Builder PR opened: $BUILDER_PR_URL — review and merge to complete the release."
