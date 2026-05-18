@@ -65,16 +65,14 @@ env:
   PACKAGE_DIR: ./packaged
 
 jobs:
-  compile:
-    name: Compile Buildpacks
-    runs-on: ubuntu-24.04
-    outputs:
-      buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
-      version: ${{ steps.generate-buildpack-matrix.outputs.version }}
-      changelog: ${{ steps.generate-changelog.outputs.changelog }}
+  notify-start:
+    name: Notify Release Started
+    if: github.event_name == 'pull_request'
+    # Runs on the IP-allowlisted runner because the GitHub App token mint hits
+    # the heroku org's IP allow list, which GitHub-hosted runners aren't on.
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
       - name: Get token for prepare PR comment
-        if: github.event_name == 'pull_request'
         uses: actions/create-github-app-token@v3
         id: comment-token
         with:
@@ -82,7 +80,6 @@ jobs:
           private-key: ${{ secrets.app_private_key }}
 
       - name: Notify release started on prepare PR
-        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ steps.comment-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
@@ -91,6 +88,14 @@ jobs:
         run: |
           gh pr comment "$PR_NUMBER" --body "Release workflow started: $RUN_URL"
 
+  compile:
+    name: Compile Buildpacks
+    runs-on: ubuntu-24.04
+    outputs:
+      buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
+      version: ${{ steps.generate-buildpack-matrix.outputs.version }}
+      changelog: ${{ steps.generate-changelog.outputs.changelog }}
+    steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -510,7 +515,9 @@ jobs:
     name: Notify Release Failure
     needs: [compile, publish-docker, publish-cnb-registry, publish-github, update-builder]
     if: failure() && github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
+    # Runs on the IP-allowlisted runner because the GitHub App token mint hits
+    # the heroku org's IP allow list, which GitHub-hosted runners aren't on.
+    runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
       - name: Get token for prepare PR comment
         uses: actions/create-github-app-token@v3
