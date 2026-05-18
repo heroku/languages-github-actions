@@ -386,7 +386,7 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Notify GitHub release published on prepare PR
-        if: github.event_name == 'pull_request' && inputs.dry_run == false
+        if: github.event_name == 'pull_request' && inputs.dry_run == false && steps.check.outputs.already_published_to_github == 'false'
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
