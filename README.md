@@ -146,7 +146,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
        github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.head.ref == 'prepare-release')
+       github.event.pull_request.head.ref == 'prepare-release' &&
+       github.event.pull_request.user.login == 'heroku-linguist[bot]')
     uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release.yml@latest
     with:
       app_id: ${{ vars.GH_APP_ID }}
