@@ -124,6 +124,13 @@ You can pin to:
 name: Release Buildpacks
 
 on:
+  # Auto-trigger when the "Prepare release" PR (created by the
+  # _buildpacks-prepare-release.yml workflow) is merged.
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
   workflow_dispatch:
 
 # Disable all GITHUB_TOKEN permissions, since the GitHub App token is used instead.
@@ -132,6 +139,15 @@ permissions: {}
 jobs:
   release:
     name: Release
+    # On `pull_request`, only run for the merged auto-generated
+    # "Prepare release" PR (branch name set by
+    # _buildpacks-prepare-release.yml). Manual dispatches always run.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'prepare-release' &&
+       github.event.pull_request.user.login == 'heroku-linguist[bot]')
     uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release.yml@latest
     with:
       app_id: ${{ vars.GH_APP_ID }}
