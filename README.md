@@ -145,6 +145,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
        github.event.pull_request.head.ref == 'prepare-release')
     uses: heroku/languages-github-actions/.github/workflows/_buildpacks-release.yml@latest
     with:
