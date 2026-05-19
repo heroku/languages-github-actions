@@ -1,0 +1,279 @@
+name: _classic-buildpack-publish
+
+on:
+  workflow_call:
+    inputs:
+      buildpack_id:
+        description: "Registry name, e.g. heroku/go"
+        type: string
+        required: true
+      qa:
+        description: "QA mode: publishes to staging registry, appends -qa to tags, and creates draft GitHub releases"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  id-token: write
+  contents: write
+
+defaults:
+  run:
+    # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
+    # rather than only error on exit (improving failure UX when pipes are used). See:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    shell: bash
+
+jobs:
+  publish:
+    name: Publish
+    if: inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: pub-hk-ubuntu-24.04-ip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Extract version from changelog
+        id: version
+        run: |
+          version=$(grep -m1 -oP '^## \[?v\K(\d+)' CHANGELOG.md)
+          if [[ -z "${version}" ]]; then
+            echo "::error::No versioned heading found in CHANGELOG.md (expected format: ## [vNNN] or ## vNNN)"
+            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "No versioned heading found in CHANGELOG.md." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          if [[ "${version}" -le 0 || "${version}" -gt 9999 ]]; then
+            echo "::error::Extracted version '${version}' is out of expected range (1-9999)"
+            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Version **${version}** looks wrong — check CHANGELOG.md heading format." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          echo "number=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish to registry
+        id: publish
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          REGISTRY_URL: ${{ inputs.qa == true && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
+          VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          if [[ ! "${REGISTRY_URL}" =~ ^https://buildpack-registry(-staging)?\.(heroku\.com|herokuapp\.com)$ ]]; then
+            echo "::error::Untrusted registry_url '${REGISTRY_URL}' — refusing to send OIDC token"
+            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Registry URL \`${REGISTRY_URL}\` is not in the allow-list. OIDC tokens will only be sent to trusted Heroku endpoints." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          if [[ ! "${BUILDPACK_ID}" =~ ^[a-z0-9-]+/[a-z0-9-]+$ ]]; then
+            echo "::error::Invalid buildpack_id '${BUILDPACK_ID}' — expected format: owner/name (lowercase alphanumeric and hyphens)"
+            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Invalid buildpack_id \`${BUILDPACK_ID}\` — expected format: \`owner/name\` (lowercase alphanumeric and hyphens only)." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          OIDC_TOKEN=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com" \
+            | jq -r '.value')
+          if [[ -z "${OIDC_TOKEN}" || "${OIDC_TOKEN}" == "null" ]]; then
+            echo "::error::Failed to obtain OIDC token"
+            echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Failed to obtain OIDC token from GitHub Actions runtime." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          # Redact the token from all subsequent log output
+          echo "::add-mask::${OIDC_TOKEN}"
+          echo "OIDC token obtained from GitHub (registry will validate claims)"
+
+          ENCODED_BUILDPACK_ID=$(printf '%s' "${BUILDPACK_ID}" | jq -sRr @uri)
+          PUBLISH_URL="${REGISTRY_URL}/buildpacks/${ENCODED_BUILDPACK_ID}/revisions"
+          echo "Publish URL: ${PUBLISH_URL}"
+
+          REQUEST_BODY=$(jq -n --arg ref "${GITHUB_SHA}" --argjson ver "${VERSION}" '{ref: $ref, version: $ver}')
+
+          response=$(curl --silent --show-error --write-out "\n%{http_code}" \
+            --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+            --request POST "${PUBLISH_URL}" \
+            --header "Accept: application/vnd.heroku+json; version=3.buildpack-registry" \
+            --header "Content-Type: application/json" \
+            --header "Authorization: Bearer ${OIDC_TOKEN}" \
+            --data "${REQUEST_BODY}") || true
+
+          http_code=$(echo "${response}" | tail -1 | tr -d '[:space:]')
+          body=$(echo "${response}" | sed '$d')
+
+          if [[ -z "${http_code}" ]]; then
+            echo "::error::No response from registry (connection failed after retries)"
+            echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Could not connect to the buildpack registry." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          if [[ "${http_code}" -ge 200 && "${http_code}" -lt 300 ]]; then
+            echo "status=$(echo "${body}" | jq -r '.status')" >> "${GITHUB_OUTPUT}"
+            echo "revision_id=$(echo "${body}" | jq -r '.id')" >> "${GITHUB_OUTPUT}"
+
+            status=$(echo "${body}" | jq -r '.status')
+            if [[ "${status}" == "published" ]]; then
+              echo "skip_poll=true" >> "${GITHUB_OUTPUT}"
+              echo "v${VERSION} already published (re-run detected)"
+              echo "## v${VERSION} already published" >> "${GITHUB_STEP_SUMMARY}"
+              echo "Re-run detected — no action taken." >> "${GITHUB_STEP_SUMMARY}"
+            else
+              echo "Revision created (status: ${status})"
+            fi
+          else
+            error_id=$(echo "${body}" | jq -r '.id // "unknown"')
+            error_msg=$(echo "${body}" | jq -r '.error // "Unknown error"')
+            case "${error_id}" in
+              ctc_denied)
+                override_url=$(echo "${body}" | jq -r '.override_url // "https://tps.heroku.tools/locks"')
+                if [[ ! "${override_url}" =~ ^https://(.*\.)?(heroku\.tools|heroku\.com)/ ]]; then
+                  override_url="https://tps.heroku.tools/locks"
+                fi
+                echo "::error::Publish blocked by CTC: ${error_msg}"
+                echo "## v${VERSION} publish blocked" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "[Override CTC lock](${override_url}), then re-run this workflow." >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              version_mismatch)
+                expected=$(echo "${body}" | jq -r '.expected')
+                got=$(echo "${body}" | jq -r '.got')
+                echo "::error::Version mismatch — registry expects v${expected}, changelog has v${got}"
+                echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                echo "Expected version **${expected}**, but changelog has **${got}**." >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "Check if a manual CLI publish incremented the version. Update the changelog heading to v${expected}, merge the fix, and re-trigger." >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              publish_pending)
+                echo "::error::Publish blocked — another publish is already in progress"
+                echo "## v${VERSION} publish blocked" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "Wait for the in-progress publish to complete, then re-run if needed." >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              unauthorized)
+                echo "::error::Unauthorized: ${error_msg}"
+                echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "Possible causes:" >> "${GITHUB_STEP_SUMMARY}"
+                echo "- Missing \`id-token: write\` permission in the workflow" >> "${GITHUB_STEP_SUMMARY}"
+                echo "- Workflow ref does not match the registry's trusted workflow configuration" >> "${GITHUB_STEP_SUMMARY}"
+                echo "- Repository or org does not match the registry's trust policy" >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              *)
+                echo "::error::Publish failed (${error_id}): ${error_msg}"
+                echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                echo "**Error:** ${error_id}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+            esac
+            exit 1
+          fi
+
+      - name: Poll for completion
+        if: steps.publish.outputs.skip_poll != 'true'
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          REGISTRY_URL: ${{ inputs.qa == true && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
+          REVISION_ID: ${{ steps.publish.outputs.revision_id }}
+          VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          elapsed=0
+          timeout=300
+          interval=10
+
+          encoded_buildpack_id=$(printf '%s' "${BUILDPACK_ID}" | jq -sRr @uri)
+          poll_url="${REGISTRY_URL}/buildpacks/${encoded_buildpack_id}/revisions/${REVISION_ID}"
+
+          while [[ ${elapsed} -lt ${timeout} ]]; do
+            response=$(curl -sS -w "\n%{http_code}" \
+              --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+              "${poll_url}" \
+              -H "Accept: application/vnd.heroku+json; version=3.buildpack-registry")
+
+            http_code=$(echo "${response}" | tail -1)
+            body=$(echo "${response}" | sed '$d')
+
+            if [[ "${http_code}" -ge 200 && "${http_code}" -lt 300 ]]; then
+              status=$(echo "${body}" | jq -r '.status')
+
+              case "${status}" in
+                published)
+                  echo "## Published v${VERSION}" >> "${GITHUB_STEP_SUMMARY}"
+                  exit 0
+                  ;;
+                failed)
+                  error=$(echo "${body}" | jq -r '.error // "Unknown error"')
+                  echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                  echo "${error}" >> "${GITHUB_STEP_SUMMARY}"
+                  exit 1
+                  ;;
+                *)
+                  echo "::debug::Revision status: ${status}"
+                  ;;
+              esac
+            else
+              echo "::warning::Poll received HTTP ${http_code}"
+            fi
+
+            sleep ${interval}
+            elapsed=$((elapsed + interval))
+          done
+
+          echo "## v${VERSION} publish timed out" >> "${GITHUB_STEP_SUMMARY}"
+          echo "The publish may still complete. Re-run this workflow to check (idempotent recovery)." >> "${GITHUB_STEP_SUMMARY}"
+          exit 1
+
+      - name: Create and push version tag
+        env:
+          QA: ${{ inputs.qa }}
+        run: |
+          tag="v${{ steps.version.outputs.number }}"
+          if [[ "${QA}" == "true" ]]; then
+            tag="${tag}-qa"
+          fi
+          existing=$(git rev-parse "refs/tags/${tag}" 2>/dev/null || true)
+          if [[ -n "${existing}" && "${existing}" != "${GITHUB_SHA}" ]]; then
+            echo "::warning::Moving tag ${tag} from ${existing} to ${GITHUB_SHA}"
+          fi
+          git tag -f "${tag}"
+          git push origin "${tag}" --force
+
+      - name: Check if GitHub Release exists
+        id: release-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA: ${{ inputs.qa }}
+        run: |
+          tag="v${{ steps.version.outputs.number }}"
+          if [[ "${QA}" == "true" ]]; then
+            tag="${tag}-qa"
+          fi
+          if gh release view "${tag}" > /dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.release-check.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA: ${{ inputs.qa }}
+        run: |
+          tag="v${{ steps.version.outputs.number }}"
+          if [[ "${QA}" == "true" ]]; then
+            tag="${tag}-qa"
+            draft_flag="--draft"
+          else
+            draft_flag=""
+          fi
+          gh release create "${tag}" \
+            --title "${tag}" \
+            --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." \
+            --verify-tag \
+            ${draft_flag}
