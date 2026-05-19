@@ -427,7 +427,12 @@ jobs:
 
   update-builder:
     name: Update Builder
-    needs: [compile, publish-docker, publish-cnb-registry, publish-github]
+    # `update-builder` only needs the published Docker Hub image (read via
+    # `crane digest`) plus `compile` outputs. Keeping it independent of
+    # `publish-cnb-registry` and `publish-github` lets the builder PR open
+    # in parallel with those jobs and means CNB-registry downtime no
+    # longer blocks builder updates.
+    needs: [compile, publish-docker]
     runs-on: ${{ inputs.ip_allowlisted_runner }}
     steps:
       - name: Get token for GH application (Linguist)
