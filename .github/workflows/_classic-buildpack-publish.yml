@@ -36,8 +36,20 @@ jobs:
     # QA mode bypasses the default-branch guard so staging publishes can be exercised from any
     # ref. Privilege escalation is bounded by the registry's OIDC trust policy (which pins
     # repo + workflow path) — this guard is a convenience, not the security boundary.
-    if: inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    #
+    # The event_name allow-list keeps `pull_request_target` and `workflow_run` callers out:
+    # those run with elevated tokens in unusual ref contexts and are not legitimate triggers
+    # for a release publish.
+    if: |
+      contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
+      && (inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: pub-hk-ubuntu-24.04-ip
+    # Single source of truth for the qa-vs-production routing — every step that needs the
+    # registry URL or tag suffix reads it from here, so the qa coupling can't drift across copies.
+    env:
+      MODE: ${{ inputs.qa && 'qa' || 'production' }}
+      REGISTRY_URL: ${{ inputs.qa && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
+      TAG_SUFFIX: ${{ inputs.qa && '-qa' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -45,19 +57,45 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Resolve and validate publish configuration
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+        run: |
+          # Print the resolved configuration up-front so a misconfigured run is visible while
+          # still cancellable (and serves as an audit trail in the run log).
+          {
+            echo "## Publish configuration"
+            echo "- mode: \`${MODE}\`"
+            echo "- registry: \`${REGISTRY_URL}\`"
+            echo "- buildpack_id: \`${BUILDPACK_ID}\`"
+            echo "- tag suffix: \`${TAG_SUFFIX:-(none)}\`"
+            echo "- ref: \`${GITHUB_REF}\`"
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+
+          # Invariant: qa ⇔ staging URL. Catches a future refactor that decouples the qa input
+          # from the URL ternary above (e.g., someone editing one but not the other).
+          if [[ "${MODE}" == "qa" && "${REGISTRY_URL}" != *"-staging"* ]]; then
+            echo "::error::Internal inconsistency: MODE=qa but REGISTRY_URL is not staging"
+            exit 1
+          fi
+          if [[ "${MODE}" == "production" && "${REGISTRY_URL}" == *"-staging"* ]]; then
+            echo "::error::Internal inconsistency: MODE=production but REGISTRY_URL is staging"
+            exit 1
+          fi
+
       - name: Extract version from changelog
         id: version
         run: |
           version=$(grep -m1 -oP '^## \[?v\K(\d+)' CHANGELOG.md)
           if [[ -z "${version}" ]]; then
             echo "::error::No versioned heading found in CHANGELOG.md (expected format: ## [vNNN] or ## vNNN)"
-            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "No versioned heading found in CHANGELOG.md." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
           if [[ "${version}" -le 0 || "${version}" -gt 9999 ]]; then
             echo "::error::Extracted version '${version}' is out of expected range (1-9999)"
-            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "Version **${version}** looks wrong — check CHANGELOG.md heading format." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
@@ -67,21 +105,21 @@ jobs:
         id: publish
         env:
           BUILDPACK_ID: ${{ inputs.buildpack_id }}
-          REGISTRY_URL: ${{ inputs.qa == true && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
           VERSION: ${{ steps.version.outputs.number }}
         run: |
           # Exact-string allow-list: defense-in-depth against a mistakenly-set REGISTRY_URL leaking the OIDC token.
+          # REGISTRY_URL is computed at job level from inputs.qa, so this also catches a corrupted job env.
           if [[ "${REGISTRY_URL}" != "https://buildpack-registry.heroku.com" \
              && "${REGISTRY_URL}" != "https://buildpack-registry-staging.herokuapp.com" ]]; then
             echo "::error::Untrusted registry_url '${REGISTRY_URL}' — refusing to send OIDC token"
-            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "Registry URL \`${REGISTRY_URL}\` is not in the allow-list. OIDC tokens will only be sent to trusted Heroku endpoints." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
 
           if [[ ! "${BUILDPACK_ID}" =~ ^[a-z0-9-]+/[a-z0-9-]+$ ]]; then
             echo "::error::Invalid buildpack_id '${BUILDPACK_ID}' — expected format: owner/name (lowercase alphanumeric and hyphens)"
-            echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "Invalid buildpack_id \`${BUILDPACK_ID}\` — expected format: \`owner/name\` (lowercase alphanumeric and hyphens only)." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
@@ -99,7 +137,7 @@ jobs:
             | jq -r '.value')
           if [[ -z "${OIDC_TOKEN}" || "${OIDC_TOKEN}" == "null" ]]; then
             echo "::error::Failed to obtain OIDC token"
-            echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## v${VERSION} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "Failed to obtain OIDC token from GitHub Actions runtime." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
@@ -126,7 +164,7 @@ jobs:
 
           if [[ -z "${http_code}" ]]; then
             echo "::error::No response from registry (connection failed after retries)"
-            echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+            echo "## v${VERSION} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "Could not connect to the buildpack registry." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
@@ -139,7 +177,7 @@ jobs:
             if [[ "${status}" == "published" ]]; then
               echo "skip_poll=true" >> "${GITHUB_OUTPUT}"
               echo "v${VERSION} already published (re-run detected)"
-              echo "## v${VERSION} already published" >> "${GITHUB_STEP_SUMMARY}"
+              echo "## v${VERSION} already published (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
               echo "Re-run detected — no action taken." >> "${GITHUB_STEP_SUMMARY}"
             else
               echo "Revision created (status: ${status})"
@@ -161,7 +199,7 @@ jobs:
                   override_url="https://tps.heroku.tools/locks"
                 fi
                 echo "::error::Publish blocked by CTC: ${error_msg}"
-                echo "## v${VERSION} publish blocked" >> "${GITHUB_STEP_SUMMARY}"
+                echo "## v${VERSION} publish blocked (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                 echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
                 echo "" >> "${GITHUB_STEP_SUMMARY}"
                 echo "[Override CTC lock](${override_url}), then re-run this workflow." >> "${GITHUB_STEP_SUMMARY}"
@@ -170,21 +208,21 @@ jobs:
                 expected=$(echo "${body}" | jq -r '.expected')
                 got=$(echo "${body}" | jq -r '.got')
                 echo "::error::Version mismatch — registry expects v${expected}, changelog has v${got}"
-                echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                echo "## v${VERSION} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                 echo "Expected version **${expected}**, but changelog has **${got}**." >> "${GITHUB_STEP_SUMMARY}"
                 echo "" >> "${GITHUB_STEP_SUMMARY}"
                 echo "Check if a manual CLI publish incremented the version. Update the changelog heading to v${expected}, merge the fix, and re-trigger." >> "${GITHUB_STEP_SUMMARY}"
                 ;;
               publish_pending)
                 echo "::error::Publish blocked — another publish is already in progress"
-                echo "## v${VERSION} publish blocked" >> "${GITHUB_STEP_SUMMARY}"
+                echo "## v${VERSION} publish blocked (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                 echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
                 echo "" >> "${GITHUB_STEP_SUMMARY}"
                 echo "Wait for the in-progress publish to complete, then re-run if needed." >> "${GITHUB_STEP_SUMMARY}"
                 ;;
               unauthorized)
                 echo "::error::Unauthorized: ${error_msg}"
-                echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                echo "## v${VERSION} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                 echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
                 echo "" >> "${GITHUB_STEP_SUMMARY}"
                 echo "Possible causes:" >> "${GITHUB_STEP_SUMMARY}"
@@ -194,7 +232,7 @@ jobs:
                 ;;
               *)
                 echo "::error::Publish failed (${error_id}): ${error_msg}"
-                echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                echo "## v${VERSION} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                 echo "**Error:** ${error_id}" >> "${GITHUB_STEP_SUMMARY}"
                 echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
                 ;;
@@ -206,7 +244,6 @@ jobs:
         if: steps.publish.outputs.skip_poll != 'true'
         env:
           BUILDPACK_ID: ${{ inputs.buildpack_id }}
-          REGISTRY_URL: ${{ inputs.qa == true && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
           REVISION_ID: ${{ steps.publish.outputs.revision_id }}
           VERSION: ${{ steps.version.outputs.number }}
         run: |
@@ -238,12 +275,12 @@ jobs:
 
               case "${status}" in
                 published)
-                  echo "## Published v${VERSION}" >> "${GITHUB_STEP_SUMMARY}"
+                  echo "## Published v${VERSION} (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                   exit 0
                   ;;
                 failed)
                   error=$(echo "${body}" | jq -r '.error // "Unknown error"')
-                  echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
+                  echo "## v${VERSION} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
                   echo "${error}" >> "${GITHUB_STEP_SUMMARY}"
                   exit 1
                   ;;
@@ -262,18 +299,13 @@ jobs:
             elapsed=$((elapsed + interval))
           done
 
-          echo "## v${VERSION} publish timed out" >> "${GITHUB_STEP_SUMMARY}"
+          echo "## v${VERSION} publish timed out (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
           echo "The publish may still complete. Re-run this workflow to check (idempotent recovery)." >> "${GITHUB_STEP_SUMMARY}"
           exit 1
 
       - name: Create and push version tag
-        env:
-          QA: ${{ inputs.qa }}
         run: |
-          tag="v${{ steps.version.outputs.number }}"
-          if [[ "${QA}" == "true" ]]; then
-            tag="${tag}-qa"
-          fi
+          tag="v${{ steps.version.outputs.number }}${TAG_SUFFIX}"
           # --verify --quiet returns clean missing-vs-error semantics: 0 if the tag exists,
           # 1 if it doesn't, non-zero+stderr on real git failures (which we let propagate).
           existing=$(git rev-parse --verify --quiet "refs/tags/${tag}^{commit}") || existing=""
@@ -296,12 +328,8 @@ jobs:
         id: release-check
         env:
           GH_TOKEN: ${{ github.token }}
-          QA: ${{ inputs.qa }}
         run: |
-          tag="v${{ steps.version.outputs.number }}"
-          if [[ "${QA}" == "true" ]]; then
-            tag="${tag}-qa"
-          fi
+          tag="v${{ steps.version.outputs.number }}${TAG_SUFFIX}"
           # Distinguish "release not found" from transient API failures so we don't
           # silently fall through to `gh release create` on an auth/5xx error.
           err_log=$(mktemp)
@@ -318,14 +346,12 @@ jobs:
         if: steps.release-check.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          QA: ${{ inputs.qa }}
         run: |
-          tag="v${{ steps.version.outputs.number }}"
-          if [[ "${QA}" == "true" ]]; then
-            tag="${tag}-qa"
+          tag="v${{ steps.version.outputs.number }}${TAG_SUFFIX}"
+          # Drafts in qa keep staging releases out of the public releases list.
+          draft_flag=""
+          if [[ "${MODE}" == "qa" ]]; then
             draft_flag="--draft"
-          else
-            draft_flag=""
           fi
           gh release create "${tag}" \
             --title "${tag}" \
