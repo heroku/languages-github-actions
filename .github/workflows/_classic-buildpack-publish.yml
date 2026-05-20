@@ -17,6 +17,12 @@ permissions:
   id-token: write
   contents: write
 
+# Serialize publishes per buildpack so two rapid prepare-release merges (or a re-run racing a
+# fresh trigger) queue rather than racing the registry and the tag/release force-push.
+concurrency:
+  group: classic-buildpack-publish-${{ inputs.buildpack_id }}
+  cancel-in-progress: false
+
 defaults:
   run:
     # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
@@ -27,6 +33,9 @@ defaults:
 jobs:
   publish:
     name: Publish
+    # QA mode bypasses the default-branch guard so staging publishes can be exercised from any
+    # ref. Privilege escalation is bounded by the registry's OIDC trust policy (which pins
+    # repo + workflow path) — this guard is a convenience, not the security boundary.
     if: inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: pub-hk-ubuntu-24.04-ip
     steps:
@@ -61,7 +70,9 @@ jobs:
           REGISTRY_URL: ${{ inputs.qa == true && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
           VERSION: ${{ steps.version.outputs.number }}
         run: |
-          if [[ ! "${REGISTRY_URL}" =~ ^https://buildpack-registry(-staging)?\.(heroku\.com|herokuapp\.com)$ ]]; then
+          # Exact-string allow-list: defense-in-depth against a mistakenly-set REGISTRY_URL leaking the OIDC token.
+          if [[ "${REGISTRY_URL}" != "https://buildpack-registry.heroku.com" \
+             && "${REGISTRY_URL}" != "https://buildpack-registry-staging.herokuapp.com" ]]; then
             echo "::error::Untrusted registry_url '${REGISTRY_URL}' — refusing to send OIDC token"
             echo "## Publish failed" >> "${GITHUB_STEP_SUMMARY}"
             echo "Registry URL \`${REGISTRY_URL}\` is not in the allow-list. OIDC tokens will only be sent to trusted Heroku endpoints." >> "${GITHUB_STEP_SUMMARY}"
@@ -75,6 +86,14 @@ jobs:
             exit 1
           fi
 
+          # Surface the misconfiguration directly rather than letting the curl below send empty
+          # headers and bottom out at the generic "Failed to obtain OIDC token" message.
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?id-token: write permission is required on the caller workflow}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?id-token: write permission is required on the caller workflow}"
+
+          # Audience is intentionally the same for prod and staging — the registry validates
+          # the audience claim as a fixed string, and the per-environment routing is handled
+          # by REGISTRY_URL above. Changing the audience here would break the trust policy match.
           OIDC_TOKEN=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com" \
             | jq -r '.value')
@@ -126,8 +145,15 @@ jobs:
               echo "Revision created (status: ${status})"
             fi
           else
-            error_id=$(echo "${body}" | jq -r '.id // "unknown"')
-            error_msg=$(echo "${body}" | jq -r '.error // "Unknown error"')
+            # Guard against non-JSON error bodies (e.g., LB 502 HTML page) — without this,
+            # the jq pipelines below fail under pipefail and bypass the per-error-id summary.
+            if echo "${body}" | jq empty 2>/dev/null; then
+              error_id=$(echo "${body}" | jq -r '.id // "unknown"')
+              error_msg=$(echo "${body}" | jq -r '.error // "Unknown error"')
+            else
+              error_id="unknown"
+              error_msg="Non-JSON response from registry (HTTP ${http_code})"
+            fi
             case "${error_id}" in
               ctc_denied)
                 override_url=$(echo "${body}" | jq -r '.override_url // "https://tps.heroku.tools/locks"')
@@ -197,11 +223,18 @@ jobs:
               "${poll_url}" \
               -H "Accept: application/vnd.heroku+json; version=3.buildpack-registry")
 
-            http_code=$(echo "${response}" | tail -1)
+            http_code=$(echo "${response}" | tail -1 | tr -d '[:space:]')
             body=$(echo "${response}" | sed '$d')
 
-            if [[ "${http_code}" -ge 200 && "${http_code}" -lt 300 ]]; then
-              status=$(echo "${body}" | jq -r '.status')
+            if [[ ! "${http_code}" =~ ^[0-9]+$ ]]; then
+              echo "::warning::Poll received non-numeric HTTP code: '${http_code}'"
+            elif [[ "${http_code}" -ge 200 && "${http_code}" -lt 300 ]]; then
+              # Tolerate non-JSON 2xx (e.g., proxy HTML) by falling through to the warning arm.
+              if echo "${body}" | jq empty 2>/dev/null; then
+                status=$(echo "${body}" | jq -r '.status // ""')
+              else
+                status=""
+              fi
 
               case "${status}" in
                 published)
@@ -213,6 +246,9 @@ jobs:
                   echo "## v${VERSION} publish failed" >> "${GITHUB_STEP_SUMMARY}"
                   echo "${error}" >> "${GITHUB_STEP_SUMMARY}"
                   exit 1
+                  ;;
+                ""|null)
+                  echo "::warning::Empty or non-JSON response body from registry"
                   ;;
                 *)
                   echo "::debug::Revision status: ${status}"
@@ -238,12 +274,23 @@ jobs:
           if [[ "${QA}" == "true" ]]; then
             tag="${tag}-qa"
           fi
-          existing=$(git rev-parse "refs/tags/${tag}" 2>/dev/null || true)
-          if [[ -n "${existing}" && "${existing}" != "${GITHUB_SHA}" ]]; then
-            echo "::warning::Moving tag ${tag} from ${existing} to ${GITHUB_SHA}"
+          # --verify --quiet returns clean missing-vs-error semantics: 0 if the tag exists,
+          # 1 if it doesn't, non-zero+stderr on real git failures (which we let propagate).
+          existing=$(git rev-parse --verify --quiet "refs/tags/${tag}^{commit}") || existing=""
+          if [[ "${existing}" == "${GITHUB_SHA}" ]]; then
+            echo "Tag ${tag} already points at ${GITHUB_SHA} — nothing to do."
+          else
+            # Force-move only on re-run recovery (the registry succeeded but tagging failed
+            # on a previous attempt). Avoids unnecessary force-push noise on the happy path.
+            if [[ -n "${existing}" ]]; then
+              echo "::warning::Moving tag ${tag} from ${existing} to ${GITHUB_SHA}"
+              git tag -f "${tag}"
+              git push origin "${tag}" --force
+            else
+              git tag "${tag}"
+              git push origin "${tag}"
+            fi
           fi
-          git tag -f "${tag}"
-          git push origin "${tag}" --force
 
       - name: Check if GitHub Release exists
         id: release-check
@@ -255,8 +302,16 @@ jobs:
           if [[ "${QA}" == "true" ]]; then
             tag="${tag}-qa"
           fi
-          if gh release view "${tag}" > /dev/null 2>&1; then
+          # Distinguish "release not found" from transient API failures so we don't
+          # silently fall through to `gh release create` on an auth/5xx error.
+          err_log=$(mktemp)
+          if gh release view "${tag}" > /dev/null 2>"${err_log}"; then
             echo "exists=true" >> "${GITHUB_OUTPUT}"
+          elif grep -qi 'release not found' "${err_log}"; then
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::error::gh release view failed for tag ${tag}: $(cat "${err_log}")"
+            exit 1
           fi
 
       - name: Create GitHub Release
