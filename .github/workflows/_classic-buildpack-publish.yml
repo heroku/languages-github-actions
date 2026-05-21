@@ -138,7 +138,9 @@ jobs:
           # for ones whose `ref` matches our tag. A revision can be in three meaningful states
           # for the purposes of pre-flight:
           #   - published: the run already finished — skip publish and release-create.
-          #   - failed: a previous attempt errored — don't let it block a retry.
+          #   - failed: equivalent to nothing-ever-published for this ref. The registry will
+          #     accept a fresh POST against the same ref; treated as noise here so it doesn't
+          #     trip the orphan-tag check below.
           #   - anything else (pending/building/...): a previous run created the revision but
           #     died before polling finished. Resume by re-running the poll step against the
           #     existing revision id rather than POSTing a duplicate.
@@ -161,6 +163,11 @@ jobs:
           fi
           registry_published=$(echo "${revisions}" | jq -r --arg tag "${TAG}" \
             '[.[] | select(.ref == $tag and .status == "published")] | length > 0')
+          # Distinguishes "tag has a failed revision" from "tag has no revision at all". The
+          # former is a valid retry path (registry accepts a fresh POST); the latter is an
+          # orphan tag that needs operator cleanup. Used by the orphan-tag check below.
+          registry_has_revision=$(echo "${revisions}" | jq -r --arg tag "${TAG}" \
+            '[.[] | select(.ref == $tag)] | length > 0')
           # If not yet published, look for an in-flight revision to resume polling.
           # Prefer the most recently created one if multiple exist (registry should not
           # produce more than one, but pick deterministically just in case).
@@ -171,10 +178,8 @@ jobs:
                | sort_by(.created_at) | last | .id // empty')
           fi
 
-          # Hit the API directly so we get clear HTTP semantics instead of string-matching
-          # gh's stderr. /releases/tags/{tag} excludes drafts, which means a stale QA draft
-          # may not be detected — that's acceptable here because QA already creates drafts
-          # idempotently.
+          # Hit the API directly so we can branch on 200 vs 404 vs other rather than
+          # string-matching `gh release view` stderr.
           release_status=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
             -i --silent 2>/dev/null | head -1 | awk '{print $2}') || true
           case "${release_status}" in
@@ -200,7 +205,11 @@ jobs:
                 registry_state="no revision"
               fi
               echo "**State observed for \`${TAG}\`:**"
-              echo "- tag: ${tag_sha:+at \`${tag_sha}\`}${tag_sha:-absent}"
+              if [[ -n "${tag_sha}" ]]; then
+                echo "- tag: at \`${tag_sha}\`"
+              else
+                echo "- tag: absent"
+              fi
               echo "- registry: ${registry_state}"
               echo "- release: $([[ "${release_exists}" == "true" ]] && echo "exists" || echo "absent")"
               echo "- this run: \`${GITHUB_SHA}\`"
@@ -220,11 +229,13 @@ jobs:
           if [[ -n "${tag_sha}" && "${tag_sha}" != "${GITHUB_SHA}" ]]; then
             fail "Tag \`${TAG}\` points at \`${tag_sha}\` but this run is at \`${GITHUB_SHA}\`."
           fi
-          # Tag exists but the registry has neither a published nor an in-flight revision —
-          # orphan tag from a run that aborted before the registry accepted the publish.
-          # An in-flight revision (pending/building) is recoverable; the publish step is
-          # skipped and the poll step resumes against the existing revision id.
-          if [[ -n "${tag_sha}" && "${registry_published}" != "true" && -z "${pending_revision_id}" ]]; then
+          # Tag exists but the registry has no revision at all — orphan tag from a run that
+          # aborted before the registry accepted the publish. A failed revision doesn't count
+          # as orphan: the registry treats it as nothing-ever-published, so the publish step
+          # below will POST a fresh revision against the same ref. An in-flight revision is
+          # recoverable too — the publish step is skipped and the poll resumes.
+          if [[ -n "${tag_sha}" && "${registry_published}" != "true" \
+             && -z "${pending_revision_id}" && "${registry_has_revision}" != "true" ]]; then
             fail "Tag \`${TAG}\` exists but the registry has no revision for it."
           fi
           # Registry published but the anchoring tag is missing. Restore the tag manually
@@ -322,8 +333,11 @@ jobs:
           # Audience is intentionally the same for prod and staging — the registry validates
           # the audience claim as a fixed string, and the per-environment routing is handled
           # by REGISTRY_URL above. Changing the audience here would break the trust policy match.
+          # Default --retry transient set (5xx, 429, connection errors) — no --retry-all-errors,
+          # so a permanent 4xx (e.g. audience-not-allowed) surfaces immediately rather than
+          # waiting through 3 backoffs.
           oidc_response=$(curl -sS --write-out "\n%{http_code}" \
-            --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+            --retry 3 --retry-delay 5 --max-time 30 \
             -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com") || true
           oidc_http_code=$(echo "${oidc_response}" | tail -1 | tr -d '[:space:]')
@@ -365,8 +379,11 @@ jobs:
           # any run where a remote tag points at a different SHA than this one.
           REQUEST_BODY=$(jq -n --arg ref "${TAG}" '{ref: $ref}')
 
+          # POST /revisions is non-idempotent: the registry creates a new row per call. Stick
+          # to the default --retry transient set so a 4xx (validation, ctc_denied, etc.) is
+          # surfaced after one attempt instead of being retried into a duplicate-pending race.
           response=$(curl --silent --show-error --write-out "\n%{http_code}" \
-            --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+            --retry 3 --retry-delay 5 --max-time 30 \
             --request POST "${PUBLISH_URL}" \
             --header "Accept: application/vnd.heroku+json; version=3.buildpack-registry" \
             --header "Content-Type: application/json" \
@@ -429,14 +446,15 @@ jobs:
             } >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           else
-            # Guard against non-JSON error bodies (e.g., LB 502 HTML page) — without this,
-            # the jq pipelines below fail under pipefail and bypass the per-error-id summary.
-            if echo "${body}" | jq empty 2>/dev/null; then
+            # Guard against empty / non-JSON error bodies (e.g., LB 502 HTML page, headers-only
+            # 5xx). `jq empty` exits 0 on empty input, which would otherwise produce a blank
+            # `Error:` summary downstream — require a non-empty body before parsing.
+            if [[ -n "${body}" ]] && echo "${body}" | jq empty 2>/dev/null; then
               error_id=$(echo "${body}" | jq -r '.id // "unknown"')
               error_msg=$(echo "${body}" | jq -r '.error // "Unknown error"')
             else
               error_id="unknown"
-              error_msg="Non-JSON response from registry (HTTP ${http_code})"
+              error_msg="Empty or non-JSON response from registry (HTTP ${http_code})"
             fi
             case "${error_id}" in
               ctc_denied)
@@ -468,8 +486,9 @@ jobs:
                 echo "- Repository or org does not match the registry's trust policy" >> "${GITHUB_STEP_SUMMARY}"
                 ;;
               *)
-                echo "::error::Publish failed (${error_id}): ${error_msg}"
+                echo "::error::Publish failed (HTTP ${http_code}, ${error_id}): ${error_msg}"
                 echo "## ${TAG} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                echo "**HTTP:** ${http_code}" >> "${GITHUB_STEP_SUMMARY}"
                 echo "**Error:** ${error_id}" >> "${GITHUB_STEP_SUMMARY}"
                 echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
                 ;;
@@ -494,10 +513,13 @@ jobs:
           poll_url="${REGISTRY_URL}/buildpacks/${encoded_buildpack_id}/revisions/${REVISION_ID}"
 
           while [[ ${elapsed} -lt ${timeout} ]]; do
+            # `|| true` so a curl failure (transport error after retries exhausted) doesn't
+            # bail out of the loop under pipefail — fall through to the empty-http_code arm
+            # below and warn-and-retry like every other transient failure.
             response=$(curl -sS -w "\n%{http_code}" \
               --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
               "${poll_url}" \
-              -H "Accept: application/vnd.heroku+json; version=3.buildpack-registry")
+              -H "Accept: application/vnd.heroku+json; version=3.buildpack-registry") || true
 
             http_code=$(echo "${response}" | tail -1 | tr -d '[:space:]')
             body=$(echo "${response}" | sed '$d')
