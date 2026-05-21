@@ -473,6 +473,11 @@ jobs:
         if: inputs.dry_run == false
         run: actions update-builder --repository-path ./buildpacks --builder-repository-path ./cnb-builder-images --builders builder-22,builder-24,builder-26
 
+      # Open the PR as a draft so the CODEOWNERS team review request stays
+      # dormant until the PR is marked ready for review. Combined with the
+      # individual `reviewers:` below and the team's "Only notify requested
+      # team members" setting, this suppresses the team-wide email when the
+      # PR is later marked ready.
       - name: Create Pull Request
         id: pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
@@ -488,9 +493,16 @@ jobs:
           path: ./cnb-builder-images
           branch: update/${{ github.repository }}
           delete-branch: true
+          draft: true
           # This will ensure commits made from this workflow are attributed to the GH application user
           committer: ${{ inputs.app_username }} <${{ inputs.app_email }}>
           author: ${{ inputs.app_username }} <${{ inputs.app_email }}>
+
+      - name: Mark PR ready for review
+        if: steps.pr.outputs.pull-request-operation == 'created'
+        run: gh pr ready --repo heroku/cnb-builder-images "${{ steps.pr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Configure PR
         if: steps.pr.outputs.pull-request-operation == 'created'
