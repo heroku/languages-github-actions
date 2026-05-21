@@ -84,13 +84,13 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve tag from changelog
+      - name: Resolve tag and changes from changelog
         id: tag
         run: |
           # Single source of truth for what this run will publish: the most-recent versioned
-          # changelog heading, materialized as a tag string. Every downstream step (tag,
-          # registry ref, release name) reads only this value, so the three artifacts can't
-          # drift apart.
+          # changelog heading and its body, materialized as a tag string and release notes.
+          # Every downstream step (tag, registry ref, release name, release body) reads only
+          # these values, so the artifacts can't drift apart.
           version=$(grep -m1 -oP '^## \[?v\K(\d+)' CHANGELOG.md)
           if [[ -z "${version}" ]]; then
             echo "::error::No versioned heading found in CHANGELOG.md (expected format: ## [vNNN] or ## vNNN)"
@@ -105,6 +105,24 @@ jobs:
             exit 1
           fi
           echo "name=v${version}${TAG_SUFFIX}" >> "${GITHUB_OUTPUT}"
+
+          # Body of the matched version section, excluding the heading itself and stopping
+          # at the next `## ` heading. The trailing `(\]|[[:space:]]|$)` anchor prevents
+          # `v1` from also matching `v10`, `v100`, etc. Reads from the working tree (the ref
+          # under publish — already checked out by actions/checkout above).
+          changes=$(awk -v ver="${version}" '
+            $0 ~ "^## \\[?v" ver "(\\]|[[:space:]]|$)" { flag=1; next }
+            /^## / { flag=0 }
+            flag
+          ' CHANGELOG.md)
+          # Multi-line value: GITHUB_OUTPUT only accepts multi-line strings via the
+          # heredoc form. The delimiter must not appear in the content — picking a
+          # collision-resistant token rather than the conventional `EOF`.
+          {
+            echo "changes<<__CHANGES_EOF_$$__"
+            echo "${changes}"
+            echo "__CHANGES_EOF_$$__"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Pre-flight consistency check
         id: preflight
@@ -569,7 +587,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.name }}
+          CHANGES: ${{ steps.tag.outputs.changes }}
         run: |
+          # Use --notes-file rather than --notes so a multi-line body with backticks,
+          # quotes, and PR links round-trips verbatim — no shell-escaping risk.
+          notes_file=$(mktemp)
+          if [[ -n "${CHANGES//[[:space:]]/}" ]]; then
+            printf '%s\n' "${CHANGES}" > "${notes_file}"
+          else
+            # Fallback: heading matched but the section body was empty (or whitespace-only).
+            # A bare link beats publishing an empty release body.
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." > "${notes_file}"
+          fi
+
           # Drafts in qa keep staging releases out of the public releases list.
           draft_flag=""
           if [[ "${MODE}" == "qa" ]]; then
@@ -578,7 +608,7 @@ jobs:
           err_log=$(mktemp)
           if ! gh release create "${TAG}" \
               --title "${TAG}" \
-              --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." \
+              --notes-file "${notes_file}" \
               --verify-tag \
               ${draft_flag} 2>"${err_log}"; then
             echo "::error::Failed to create release for ${TAG}: $(cat "${err_log}")"
