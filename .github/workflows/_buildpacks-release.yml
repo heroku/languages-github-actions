@@ -526,7 +526,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BUILDER_PR_URL: ${{ steps.pr.outputs.pull-request-url }}
         run: |
-          gh pr comment "$PR_NUMBER" --body "Builder PR opened: $BUILDER_PR_URL — review and merge to complete the release."
+          gh pr comment "$PR_NUMBER" --body "Builder PR opened: $BUILDER_PR_URL"
 
   notify-failure:
     name: Notify Release Failure
