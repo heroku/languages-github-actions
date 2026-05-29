@@ -1,0 +1,678 @@
+name: _classic-buildpack-publish
+
+on:
+  workflow_call:
+    inputs:
+      buildpack_id:
+        description: "Registry name, e.g. heroku/go"
+        type: string
+        required: true
+      qa:
+        description: "QA mode: publishes to staging registry, appends -qa to tags, and creates draft GitHub releases"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  id-token: write
+  contents: write
+
+# Serialize publishes per buildpack so two rapid prepare-release merges (or a re-run racing a
+# fresh trigger) queue rather than racing the pre-flight check and the tag/registry/release
+# state mutations against each other.
+concurrency:
+  group: classic-buildpack-publish-${{ inputs.buildpack_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # Setting an explicit bash shell ensures GitHub Actions enables pipefail mode too,
+    # rather than only error on exit (improving failure UX when pipes are used). See:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    shell: bash
+
+jobs:
+  publish:
+    name: Publish
+    # QA mode bypasses the default-branch guard so staging publishes can be exercised from any
+    # ref. Privilege escalation is bounded by the registry's OIDC trust policy (which pins
+    # repo + workflow path) — this guard is a convenience, not the security boundary.
+    #
+    # The event_name allow-list keeps `pull_request_target` and `workflow_run` callers out:
+    # those run with elevated tokens in unusual ref contexts and are not legitimate triggers
+    # for a release publish.
+    if: |
+      contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
+      && (inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    runs-on: pub-hk-ubuntu-24.04-ip
+    # Single source of truth for the qa-vs-production routing — every step that needs the
+    # registry URL or tag suffix reads it from here, so the qa coupling can't drift across copies.
+    env:
+      MODE: ${{ inputs.qa && 'qa' || 'production' }}
+      REGISTRY_URL: ${{ inputs.qa && 'https://buildpack-registry-staging.herokuapp.com' || 'https://buildpack-registry.heroku.com' }}
+      TAG_SUFFIX: ${{ inputs.qa && '-qa' || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve and validate publish configuration
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+        run: |
+          # Print the resolved configuration up-front so a misconfigured run is visible while
+          # still cancellable (and serves as an audit trail in the run log).
+          {
+            echo "## Publish configuration"
+            echo "- mode: \`${MODE}\`"
+            echo "- registry: \`${REGISTRY_URL}\`"
+            echo "- buildpack_id: \`${BUILDPACK_ID}\`"
+            echo "- tag suffix: \`${TAG_SUFFIX:-(none)}\`"
+            echo "- ref: \`${GITHUB_REF}\`"
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+
+          # Invariant: qa ⇔ staging URL. Catches a future refactor that decouples the qa input
+          # from the URL ternary above (e.g., someone editing one but not the other).
+          if [[ "${MODE}" == "qa" && "${REGISTRY_URL}" != *"-staging"* ]]; then
+            echo "::error::Internal inconsistency: MODE=qa but REGISTRY_URL is not staging"
+            exit 1
+          fi
+          if [[ "${MODE}" == "production" && "${REGISTRY_URL}" == *"-staging"* ]]; then
+            echo "::error::Internal inconsistency: MODE=production but REGISTRY_URL is staging"
+            exit 1
+          fi
+
+          # Validate buildpack_id format up-front (used by preflight, publish, and poll steps).
+          if [[ ! "${BUILDPACK_ID}" =~ ^[a-z0-9-]+/[a-z0-9-]+$ ]]; then
+            echo "::error::Invalid buildpack_id '${BUILDPACK_ID}' — expected format: owner/name (lowercase alphanumeric and hyphens)"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Invalid buildpack_id \`${BUILDPACK_ID}\` — expected format: \`owner/name\` (lowercase alphanumeric and hyphens only)." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+      - name: Resolve tag and changes from changelog
+        id: tag
+        run: |
+          # Single source of truth for what this run will publish: the most-recent versioned
+          # changelog heading and its body, materialized as a tag string and release notes.
+          # Every downstream step (tag, registry ref, release name, release body) reads only
+          # these values, so the artifacts can't drift apart.
+          version=$(grep -m1 -oP '^## \[?v\K(\d+)' CHANGELOG.md)
+          if [[ -z "${version}" ]]; then
+            echo "::error::No versioned heading found in CHANGELOG.md (expected format: ## [vNNN] or ## vNNN)"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "No versioned heading found in CHANGELOG.md." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          if [[ "${version}" -le 0 || "${version}" -gt 9999 ]]; then
+            echo "::error::Extracted version '${version}' is out of expected range (1-9999)"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Version **${version}** looks wrong — check CHANGELOG.md heading format." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          echo "name=v${version}${TAG_SUFFIX}" >> "${GITHUB_OUTPUT}"
+
+          # Body of the matched version section, excluding the heading itself and stopping
+          # at the next `## ` heading. The trailing `(\]|[[:space:]]|$)` anchor prevents
+          # `v1` from also matching `v10`, `v100`, etc. Reads from the working tree (the ref
+          # under publish — already checked out by actions/checkout above).
+          changes=$(awk -v ver="${version}" '
+            $0 ~ "^## \\[?v" ver "(\\]|[[:space:]]|$)" { flag=1; next }
+            /^## / { flag=0 }
+            flag
+          ' CHANGELOG.md)
+          # An empty body under a versioned heading is almost always a formatting bug the
+          # author would want flagged. Warn but don't fail — release-creation has a fallback.
+          if [[ -z "${changes//[[:space:]]/}" ]]; then
+            echo "::warning::CHANGELOG section for v${version} is empty — release notes will use a generic fallback"
+          fi
+          # Multi-line value: GITHUB_OUTPUT only accepts multi-line strings via the
+          # heredoc form. The delimiter must not appear in the content — picking a
+          # collision-resistant token rather than the conventional `EOF`.
+          {
+            echo "changes<<__CHANGES_EOF_$$__"
+            echo "${changes}"
+            echo "__CHANGES_EOF_$$__"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Pre-flight consistency check
+        id: preflight
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          # Pre-flight observes the existing state of the tag, the registry, and the GitHub
+          # Release for this tag. The downstream steps mutate state in this order: tag →
+          # registry publish → release. Any partial-completion pattern (e.g. tag without a
+          # registry publish) is treated as divergence the buildpack author must clean up
+          # manually before re-running — the workflow never silently force-moves a tag,
+          # release, or published revision a customer may have pinned to.
+          encoded_buildpack_id=$(printf '%s' "${BUILDPACK_ID}" | jq -sRr @uri)
+
+          # Two-step so a corrupt repo / I/O error doesn't get silently treated as "tag absent":
+          # `git show-ref --verify --quiet` exits 1 specifically for a missing ref and >1 for
+          # real errors. Once existence is confirmed, resolving the tag with `^{commit}` gets
+          # the hash of the actual commit it points to instead of the tag object itself, and
+          # cannot fail except on a real error, which we let propagate.
+          #
+          # Capture the exit code once, then branch — using `$?` directly inside the elif/else
+          # arms would read the result of the preceding `[[ ]]` test, not git's exit code.
+          rc=0
+          git show-ref --tags --verify --quiet "refs/tags/${TAG}" || rc=$?
+          if [[ ${rc} -eq 0 ]]; then
+            tag_sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")
+          elif [[ ${rc} -eq 1 ]]; then
+            tag_sha=""
+          else
+            echo "::error::git show-ref failed unexpectedly for refs/tags/${TAG} (exit ${rc})"
+            exit 1
+          fi
+
+          # GET /buildpacks/{id}/revisions returns every revision for this buildpack; we look
+          # for ones whose `ref` matches our tag. A revision can be in three meaningful states
+          # for the purposes of pre-flight:
+          #   - published: the run already finished — skip publish and release-create.
+          #   - failed: equivalent to nothing-ever-published for this ref. The registry will
+          #     accept a fresh POST against the same ref; treated as noise here so it doesn't
+          #     trip the orphan-tag check below.
+          #   - anything else (pending/building/...): a previous run created the revision but
+          #     died before polling finished. Resume by re-running the poll step against the
+          #     existing revision id rather than POSTing a duplicate.
+          revisions_url="${REGISTRY_URL}/buildpacks/${encoded_buildpack_id}/revisions"
+          revisions=$(curl --silent --show-error --fail \
+            --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+            "${revisions_url}" \
+            -H "Accept: application/vnd.heroku+json; version=3.buildpack-registry") || {
+              echo "::error::Failed to query registry at ${revisions_url}"
+              echo "## Pre-flight failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+              echo "Could not reach the buildpack registry to check existing revisions." >> "${GITHUB_STEP_SUMMARY}"
+              exit 1
+            }
+          # Stricter than `jq empty`: a wrapped envelope (e.g., `{data: [...]}` from a future
+          # API change) would parse as JSON but the downstream filters would silently produce
+          # wrong results. Fail loudly if the shape isn't a top-level array.
+          if ! echo "${revisions}" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            echo "::error::Registry returned unexpected shape from ${revisions_url} (expected top-level array)"
+            exit 1
+          fi
+          registry_published=$(echo "${revisions}" | jq -r --arg tag "${TAG}" \
+            '[.[] | select(.ref == $tag and .status == "published")] | length > 0')
+          # Distinguishes "tag has a failed revision" from "tag has no revision at all". The
+          # former is a valid retry path (registry accepts a fresh POST); the latter is an
+          # orphan tag that needs operator cleanup. Used by the orphan-tag check below.
+          registry_has_revision=$(echo "${revisions}" | jq -r --arg tag "${TAG}" \
+            '[.[] | select(.ref == $tag)] | length > 0')
+          # If not yet published, look for an in-flight revision to resume polling.
+          # Prefer the most recently created one if multiple exist (registry should not
+          # produce more than one, but pick deterministically just in case).
+          pending_revision_id=""
+          if [[ "${registry_published}" != "true" ]]; then
+            pending_revision_id=$(echo "${revisions}" | jq -r --arg tag "${TAG}" \
+              '[.[] | select(.ref == $tag and .status != "published" and .status != "failed")]
+               | sort_by(.created_at) | last | .id // empty')
+          fi
+
+          # Hit the API directly so we can branch on 200 vs 404 vs other rather than
+          # string-matching `gh release view` stderr. Capture stderr so transport-level
+          # failures (DNS, TLS, timeout) — which never produce an HTTP status line — can be
+          # surfaced in the diagnostic instead of being swallowed.
+          release_err_log=$(mktemp)
+          release_status=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            -i --silent 2>"${release_err_log}" | head -1 | awk '{print $2}') || true
+          case "${release_status}" in
+            200) release_exists=true ;;
+            404) release_exists=false ;;
+            *)
+              echo "::error::Unexpected status ${release_status:-unknown} from GitHub releases API for ${TAG}"
+              if [[ -s "${release_err_log}" ]]; then
+                {
+                  echo '```'
+                  cat "${release_err_log}"
+                  echo '```'
+                } >&2
+              fi
+              exit 1
+              ;;
+          esac
+
+          fail() {
+            echo "::error::Pre-flight failed: $1"
+            {
+              echo "## Pre-flight failed (${MODE})"
+              echo "$1"
+              echo ""
+              if [[ "${registry_published}" == "true" ]]; then
+                registry_state="published"
+              elif [[ -n "${pending_revision_id}" ]]; then
+                registry_state="in-flight (revision \`${pending_revision_id}\`)"
+              else
+                registry_state="no revision"
+              fi
+              echo "**State observed for \`${TAG}\`:**"
+              if [[ -n "${tag_sha}" ]]; then
+                echo "- tag: at \`${tag_sha}\`"
+              else
+                echo "- tag: absent"
+              fi
+              echo "- registry: ${registry_state}"
+              echo "- release: $([[ "${release_exists}" == "true" ]] && echo "exists" || echo "absent")"
+              echo "- this run: \`${GITHUB_SHA}\`"
+              echo ""
+              echo "Investigate, then clean up the divergent artifacts before re-running:"
+              echo "- Delete a stale tag: \`git push origin --delete ${TAG}\`"
+              echo "- Delete a stale release: \`gh release delete ${TAG}\`"
+              echo "- A registry revision that's already published cannot be deleted — bump the changelog version instead."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          }
+
+          # Tag must agree with this run's commit. The publish workflow is invoked from the
+          # default branch (or the QA caller's ref), and a tag pointing somewhere else means
+          # the source of truth has shifted since the tag was placed — refuse rather than
+          # silently re-publish from the new SHA.
+          if [[ -n "${tag_sha}" && "${tag_sha}" != "${GITHUB_SHA}" ]]; then
+            fail "Tag \`${TAG}\` points at \`${tag_sha}\` but this run is at \`${GITHUB_SHA}\`."
+          fi
+          # Tag exists but the registry has no revision at all — orphan tag from a run that
+          # aborted before the registry accepted the publish. A failed revision doesn't count
+          # as orphan: the registry treats it as nothing-ever-published, so the publish step
+          # below will POST a fresh revision against the same ref. An in-flight revision is
+          # recoverable too — the publish step is skipped and the poll resumes.
+          if [[ -n "${tag_sha}" && "${registry_published}" != "true" \
+             && -z "${pending_revision_id}" && "${registry_has_revision}" != "true" ]]; then
+            fail "Tag \`${TAG}\` exists but the registry has no revision for it."
+          fi
+          # Registry published but the anchoring tag is missing. Restore the tag manually
+          # before re-running — re-creating it from this run's SHA could disagree with the
+          # SHA the registry already published from.
+          if [[ "${registry_published}" == "true" && -z "${tag_sha}" ]]; then
+            fail "Registry has \`${TAG}\` published but the tag is absent. The tag must be restored manually before re-running."
+          fi
+          if [[ "${release_exists}" == "true" && -z "${tag_sha}" ]]; then
+            fail "Release \`${TAG}\` exists but the tag is absent locally and on the remote."
+          fi
+          if [[ "${release_exists}" == "true" && "${registry_published}" != "true" ]]; then
+            fail "Release \`${TAG}\` exists but the registry has no published revision for it."
+          fi
+
+          # All consistent — emit outputs for downstream steps.
+          if [[ "${registry_published}" == "true" ]]; then
+            registry_summary="\`${TAG}\` already published (idempotent re-run)"
+          elif [[ -n "${pending_revision_id}" ]]; then
+            registry_summary="resuming poll for in-flight revision \`${pending_revision_id}\`"
+          else
+            registry_summary="to be published"
+          fi
+          {
+            echo "## Pre-flight OK (${MODE})"
+            echo "- tag \`${TAG}\`: $([[ -n "${tag_sha}" ]] && echo "exists at \`${tag_sha}\`" || echo "to be created")"
+            echo "- registry: ${registry_summary}"
+            echo "- release \`${TAG}\`: $([[ "${release_exists}" == "true" ]] && echo "exists" || echo "to be created")"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "tag_exists=$([[ -n "${tag_sha}" ]] && echo true || echo false)"
+            echo "registry_published=${registry_published}"
+            echo "pending_revision_id=${pending_revision_id}"
+            echo "release_exists=${release_exists}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Create and push version tag
+        # Tag must exist before the registry publish: the registry uses the `ref` field to
+        # fetch the source tarball from GitHub at /{owner}/{repo}/tarball/{ref}. Pre-flight
+        # has already verified that any pre-existing tag matches GITHUB_SHA and skips this
+        # step in that case via the `if:` above — so this only runs as a fresh create.
+        if: steps.preflight.outputs.tag_exists != 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          git tag "${TAG}"
+          # The push can still race a concurrent run that placed this tag between pre-flight
+          # and now, so surface the underlying git error rather than letting raw stderr be
+          # the only signal.
+          err_log=$(mktemp)
+          if ! git push origin "${TAG}" 2>"${err_log}"; then
+            echo "::error::Failed to push tag ${TAG}: $(cat "${err_log}")"
+            {
+              echo "## Tag push failed (${MODE})"
+              echo "Could not push tag \`${TAG}\` to origin. The remote may have placed this tag concurrently."
+              echo ""
+              echo '```'
+              cat "${err_log}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+      - name: Publish to registry
+        id: publish
+        # Skip when pre-flight saw the revision already published, OR when a previous run
+        # left an in-flight revision we can resume polling against (no need to POST again).
+        if: steps.preflight.outputs.registry_published != 'true' && steps.preflight.outputs.pending_revision_id == ''
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          # Exact-string allow-list: defense-in-depth against a mistakenly-set REGISTRY_URL leaking the OIDC token.
+          # REGISTRY_URL is computed at job level from inputs.qa, so this also catches a corrupted job env.
+          if [[ "${REGISTRY_URL}" != "https://buildpack-registry.heroku.com" \
+             && "${REGISTRY_URL}" != "https://buildpack-registry-staging.herokuapp.com" ]]; then
+            echo "::error::Untrusted registry_url '${REGISTRY_URL}' — refusing to send OIDC token"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Registry URL \`${REGISTRY_URL}\` is not in the allow-list. OIDC tokens will only be sent to trusted Heroku endpoints." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          # Surface the misconfiguration directly rather than letting the curl below send empty
+          # headers and bottom out at the generic "Failed to obtain OIDC token" message.
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?id-token: write permission is required on the caller workflow}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?id-token: write permission is required on the caller workflow}"
+
+          # Audience is intentionally the same for prod and staging — the registry validates
+          # the audience claim as a fixed string, and the per-environment routing is handled
+          # by REGISTRY_URL above. Changing the audience here would break the trust policy match.
+          # --retry handles 5xx/429 and DNS/network errors; --retry-connrefused additionally
+          # retries on a server that actively refuses the connection (curl excludes this from
+          # the default retry set). No --retry-all-errors, so a permanent 4xx (e.g.
+          # audience-not-allowed) surfaces immediately rather than waiting through 3 backoffs.
+          oidc_err_log=$(mktemp)
+          oidc_response=$(curl -sS --write-out "\n%{http_code}" \
+            --retry 3 --retry-delay 5 --retry-connrefused --max-time 30 \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com" 2>"${oidc_err_log}") || true
+          oidc_http_code=$(echo "${oidc_response}" | tail -1 | tr -d '[:space:]')
+          oidc_body=$(echo "${oidc_response}" | sed '$d')
+          # On non-2xx, surface the endpoint's response (e.g. audience-not-allowed) rather
+          # than collapsing every failure into a generic "could not obtain token" message.
+          # When http_code is empty (DNS, TLS, timeout — no response line at all), the
+          # transport error from curl's stderr is the only signal we have.
+          if [[ ! "${oidc_http_code}" =~ ^2[0-9]{2}$ ]]; then
+            echo "::error::OIDC token endpoint returned HTTP ${oidc_http_code:-unknown}"
+            {
+              echo "## ${TAG} publish failed (${MODE})"
+              echo "OIDC token endpoint returned HTTP \`${oidc_http_code:-unknown}\`."
+              if [[ -n "${oidc_body}" ]]; then
+                echo ""
+                echo '```'
+                echo "${oidc_body:0:500}"
+                echo '```'
+              fi
+              if [[ -s "${oidc_err_log}" ]]; then
+                echo ""
+                echo "Transport error:"
+                echo '```'
+                cat "${oidc_err_log}"
+                echo '```'
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          OIDC_TOKEN=$(echo "${oidc_body}" | jq -r '.value // empty')
+          if [[ -z "${OIDC_TOKEN}" ]]; then
+            echo "::error::OIDC token response missing .value field"
+            echo "## ${TAG} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "OIDC endpoint returned 2xx but the response body did not contain a \`.value\` field." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          # Redact the token from all subsequent log output
+          echo "::add-mask::${OIDC_TOKEN}"
+          echo "OIDC token obtained from GitHub (registry will validate claims)"
+
+          ENCODED_BUILDPACK_ID=$(printf '%s' "${BUILDPACK_ID}" | jq -sRr @uri)
+          PUBLISH_URL="${REGISTRY_URL}/buildpacks/${ENCODED_BUILDPACK_ID}/revisions"
+          echo "Publish URL: ${PUBLISH_URL}"
+
+          # `ref` is the version tag — the registry resolves it to a tarball at
+          # /{owner}/{repo}/tarball/{ref}, so the tag must be visible on origin before this
+          # call. The previous step pushes a new tag when needed; pre-flight already rejected
+          # any run where a remote tag points at a different SHA than this one.
+          REQUEST_BODY=$(jq -n --arg ref "${TAG}" '{ref: $ref}')
+
+          # POST /revisions is non-idempotent: the registry creates a new row per call. Stick
+          # to the default --retry transient set (plus --retry-connrefused — the request
+          # never reached the server, so retrying can't create a duplicate row) and skip
+          # --retry-all-errors so a 4xx (validation, ctc_denied, etc.) is surfaced after one
+          # attempt instead of being retried into a duplicate-pending race.
+          # Capture stderr so a transport-level failure (DNS, TLS, post-retry connection error)
+          # is visible — without it the diagnostic just says "connection failed after retries"
+          # with no clue why, and this call is non-idempotent so the operator needs to know
+          # whether the request might still have reached the registry.
+          publish_err_log=$(mktemp)
+          response=$(curl --silent --show-error --write-out "\n%{http_code}" \
+            --retry 3 --retry-delay 5 --retry-connrefused --max-time 30 \
+            --request POST "${PUBLISH_URL}" \
+            --header "Accept: application/vnd.heroku+json; version=3.buildpack-registry" \
+            --header "Content-Type: application/json" \
+            --header "Authorization: Bearer ${OIDC_TOKEN}" \
+            --data "${REQUEST_BODY}" 2>"${publish_err_log}") || true
+
+          http_code=$(echo "${response}" | tail -1 | tr -d '[:space:]')
+          body=$(echo "${response}" | sed '$d')
+
+          if [[ -z "${http_code}" ]]; then
+            echo "::error::No response from registry (connection failed after retries)"
+            {
+              echo "## ${TAG} publish failed (${MODE})"
+              echo "Could not connect to the buildpack registry."
+              if [[ -s "${publish_err_log}" ]]; then
+                echo ""
+                echo "Transport error:"
+                echo '```'
+                cat "${publish_err_log}"
+                echo '```'
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          if [[ "${http_code}" -ge 200 && "${http_code}" -lt 300 ]]; then
+            revision_id=$(echo "${body}" | jq -r '.id // empty')
+            if [[ -z "${revision_id}" ]]; then
+              # Without a revision id the poll step would hit /revisions/null and 404 for
+              # the full 5-minute timeout. Fail loudly here instead.
+              echo "::error::Registry returned 2xx without a revision id"
+              {
+                echo "## ${TAG} publish failed (${MODE})"
+                echo "Registry returned a successful status code but no revision id in the body."
+                echo ""
+                echo '```'
+                echo "${body:0:500}"
+                echo '```'
+              } >> "${GITHUB_STEP_SUMMARY}"
+              exit 1
+            fi
+            echo "revision_id=${revision_id}" >> "${GITHUB_OUTPUT}"
+            echo "Revision created (status: $(echo "${body}" | jq -r '.status // "unknown"'))"
+          elif [[ "${http_code}" == "422" ]] && echo "${body}" | jq -e 'type == "object" and (has("id") | not)' >/dev/null 2>&1; then
+            # ActiveModel validation errors don't use the registry's {id, error} envelope —
+            # they're a flat object of attribute → array-of-messages, e.g. {"ref": ["is too
+            # long..."]}. Without this branch they'd fall through to the generic "unknown"
+            # arm and the author wouldn't see what failed.
+            echo "::error::Publish failed validation (HTTP 422)"
+            rendered=$(echo "${body}" | jq -r '
+              to_entries[]
+              | .key as $k
+              | (if (.value | type) == "array" then .value[] else .value end)
+              | "- \($k): \(.)"
+            ')
+            {
+              echo "## ${TAG} publish failed (${MODE})"
+              echo "Registry rejected the revision payload:"
+              echo ""
+              if [[ -n "${rendered}" ]]; then
+                echo "${rendered}"
+              else
+                # Body was 422-shaped but produced no bullets (unexpected variant) — dump
+                # the raw payload so the author has something to debug.
+                echo '```'
+                echo "${body}"
+                echo '```'
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          else
+            # Guard against empty / non-JSON error bodies (e.g., LB 502 HTML page, headers-only
+            # 5xx). `jq empty` exits 0 on empty input, which would otherwise produce a blank
+            # `Error:` summary downstream — require a non-empty body before parsing.
+            if [[ -n "${body}" ]] && echo "${body}" | jq empty 2>/dev/null; then
+              error_id=$(echo "${body}" | jq -r '.id // "unknown"')
+              error_msg=$(echo "${body}" | jq -r '.error // "Unknown error"')
+            else
+              error_id="unknown"
+              error_msg="Empty or non-JSON response from registry (HTTP ${http_code})"
+            fi
+            case "${error_id}" in
+              ctc_denied)
+                # The registry returns the operator's override URL in the response body, but
+                # we don't trust it blindly — a malformed or hostile value could surface as
+                # a clickable link in the step summary and steer operators to an attacker
+                # page. Fall back to the canonical TPS URL when the registry omits the field
+                # or when it doesn't match the heroku.tools / heroku.com domain allow-list.
+                override_url=$(echo "${body}" | jq -r '.override_url // "https://tps.heroku.tools/locks"')
+                if [[ ! "${override_url}" =~ ^https://(.*\.)?(heroku\.tools|heroku\.com)/ ]]; then
+                  override_url="https://tps.heroku.tools/locks"
+                fi
+                echo "::error::Publish blocked by CTC: ${error_msg}"
+                echo "## ${TAG} publish blocked (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "[Override CTC lock](${override_url}), then re-run this workflow." >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              pending_release)
+                echo "::error::Publish blocked — another publish is already in progress"
+                echo "## ${TAG} publish blocked (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "Wait for the in-progress publish to complete, then re-run if needed." >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              unauthorized)
+                echo "::error::Unauthorized: ${error_msg}"
+                echo "## ${TAG} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "" >> "${GITHUB_STEP_SUMMARY}"
+                echo "Possible causes:" >> "${GITHUB_STEP_SUMMARY}"
+                echo "- Missing \`id-token: write\` permission in the workflow" >> "${GITHUB_STEP_SUMMARY}"
+                echo "- Workflow ref does not match the registry's trusted workflow configuration" >> "${GITHUB_STEP_SUMMARY}"
+                echo "- Repository or org does not match the registry's trust policy" >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+              *)
+                echo "::error::Publish failed (HTTP ${http_code}, ${error_id}): ${error_msg}"
+                echo "## ${TAG} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                echo "**HTTP:** ${http_code}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "**Error:** ${error_id}" >> "${GITHUB_STEP_SUMMARY}"
+                echo "${error_msg}" >> "${GITHUB_STEP_SUMMARY}"
+                ;;
+            esac
+            exit 1
+          fi
+
+      - name: Poll for completion
+        # Run when this run's publish step just created a revision, or when pre-flight
+        # found one already in flight from a prior run that we're resuming.
+        if: steps.publish.outcome == 'success' || steps.preflight.outputs.pending_revision_id != ''
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          REVISION_ID: ${{ steps.publish.outputs.revision_id || steps.preflight.outputs.pending_revision_id }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          elapsed=0
+          timeout=300
+          interval=10
+
+          encoded_buildpack_id=$(printf '%s' "${BUILDPACK_ID}" | jq -sRr @uri)
+          poll_url="${REGISTRY_URL}/buildpacks/${encoded_buildpack_id}/revisions/${REVISION_ID}"
+
+          while [[ ${elapsed} -lt ${timeout} ]]; do
+            # `|| true` so a curl failure (transport error after retries exhausted) doesn't
+            # bail out of the loop under pipefail — fall through to the empty-http_code arm
+            # below and warn-and-retry like every other transient failure.
+            response=$(curl -sS -w "\n%{http_code}" \
+              --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+              "${poll_url}" \
+              -H "Accept: application/vnd.heroku+json; version=3.buildpack-registry") || true
+
+            http_code=$(echo "${response}" | tail -1 | tr -d '[:space:]')
+            body=$(echo "${response}" | sed '$d')
+
+            if [[ ! "${http_code}" =~ ^[0-9]+$ ]]; then
+              echo "::warning::Poll received non-numeric HTTP code: '${http_code}'"
+            elif [[ "${http_code}" -ge 200 && "${http_code}" -lt 300 ]]; then
+              # Tolerate non-JSON 2xx (e.g., proxy HTML) by falling through to the warning arm.
+              if echo "${body}" | jq empty 2>/dev/null; then
+                status=$(echo "${body}" | jq -r '.status // ""')
+              else
+                status=""
+              fi
+
+              case "${status}" in
+                published)
+                  echo "## Published ${TAG} (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                  exit 0
+                  ;;
+                failed)
+                  error=$(echo "${body}" | jq -r '.error // "Unknown error"')
+                  echo "## ${TAG} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+                  echo "${error}" >> "${GITHUB_STEP_SUMMARY}"
+                  exit 1
+                  ;;
+                ""|null)
+                  echo "::warning::Empty or non-JSON response body from registry"
+                  ;;
+                *)
+                  echo "::debug::Revision status: ${status}"
+                  ;;
+              esac
+            else
+              echo "::warning::Poll received HTTP ${http_code}"
+            fi
+
+            sleep ${interval}
+            elapsed=$((elapsed + interval))
+          done
+
+          echo "## ${TAG} publish timed out (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+          echo "The publish may still complete. Re-run this workflow to check (idempotent recovery)." >> "${GITHUB_STEP_SUMMARY}"
+          exit 1
+
+      - name: Create GitHub Release
+        if: steps.preflight.outputs.release_exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.name }}
+          CHANGES: ${{ steps.tag.outputs.changes }}
+        run: |
+          # Use --notes-file rather than --notes so a multi-line body with backticks,
+          # quotes, and PR links round-trips verbatim — no shell-escaping risk.
+          notes_file=$(mktemp)
+          if [[ -n "${CHANGES//[[:space:]]/}" ]]; then
+            printf '%s\n' "${CHANGES}" > "${notes_file}"
+          else
+            # Fallback: heading matched but the section body was empty (or whitespace-only).
+            # A bare link beats publishing an empty release body.
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." > "${notes_file}"
+          fi
+
+          # Drafts in qa keep staging releases out of the public releases list.
+          draft_flag=""
+          if [[ "${MODE}" == "qa" ]]; then
+            draft_flag="--draft"
+          fi
+          err_log=$(mktemp)
+          if ! gh release create "${TAG}" \
+              --title "${TAG}" \
+              --notes-file "${notes_file}" \
+              --verify-tag \
+              ${draft_flag} 2>"${err_log}"; then
+            echo "::error::Failed to create release for ${TAG}: $(cat "${err_log}")"
+            {
+              echo "## Release creation failed (${MODE})"
+              echo "Could not create GitHub Release \`${TAG}\`."
+              echo ""
+              echo '```'
+              cat "${err_log}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
