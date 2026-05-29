@@ -373,12 +373,13 @@ jobs:
           # Audience is intentionally the same for prod and staging — the registry validates
           # the audience claim as a fixed string, and the per-environment routing is handled
           # by REGISTRY_URL above. Changing the audience here would break the trust policy match.
-          # Default --retry transient set (5xx, 429, connection errors) — no --retry-all-errors,
-          # so a permanent 4xx (e.g. audience-not-allowed) surfaces immediately rather than
-          # waiting through 3 backoffs.
+          # --retry handles 5xx/429 and DNS/network errors; --retry-connrefused additionally
+          # retries on a server that actively refuses the connection (curl excludes this from
+          # the default retry set). No --retry-all-errors, so a permanent 4xx (e.g.
+          # audience-not-allowed) surfaces immediately rather than waiting through 3 backoffs.
           oidc_err_log=$(mktemp)
           oidc_response=$(curl -sS --write-out "\n%{http_code}" \
-            --retry 3 --retry-delay 5 --max-time 30 \
+            --retry 3 --retry-delay 5 --retry-connrefused --max-time 30 \
             -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com" 2>"${oidc_err_log}") || true
           oidc_http_code=$(echo "${oidc_response}" | tail -1 | tr -d '[:space:]')
@@ -430,15 +431,17 @@ jobs:
           REQUEST_BODY=$(jq -n --arg ref "${TAG}" '{ref: $ref}')
 
           # POST /revisions is non-idempotent: the registry creates a new row per call. Stick
-          # to the default --retry transient set so a 4xx (validation, ctc_denied, etc.) is
-          # surfaced after one attempt instead of being retried into a duplicate-pending race.
+          # to the default --retry transient set (plus --retry-connrefused — the request
+          # never reached the server, so retrying can't create a duplicate row) and skip
+          # --retry-all-errors so a 4xx (validation, ctc_denied, etc.) is surfaced after one
+          # attempt instead of being retried into a duplicate-pending race.
           # Capture stderr so a transport-level failure (DNS, TLS, post-retry connection error)
           # is visible — without it the diagnostic just says "connection failed after retries"
           # with no clue why, and this call is non-idempotent so the operator needs to know
           # whether the request might still have reached the registry.
           publish_err_log=$(mktemp)
           response=$(curl --silent --show-error --write-out "\n%{http_code}" \
-            --retry 3 --retry-delay 5 --max-time 30 \
+            --retry 3 --retry-delay 5 --retry-connrefused --max-time 30 \
             --request POST "${PUBLISH_URL}" \
             --header "Accept: application/vnd.heroku+json; version=3.buildpack-registry" \
             --header "Content-Type: application/json" \
