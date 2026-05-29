@@ -84,6 +84,14 @@ jobs:
             exit 1
           fi
 
+          # Validate buildpack_id format up-front (used by preflight, publish, and poll steps).
+          if [[ ! "${BUILDPACK_ID}" =~ ^[a-z0-9-]+/[a-z0-9-]+$ ]]; then
+            echo "::error::Invalid buildpack_id '${BUILDPACK_ID}' — expected format: owner/name (lowercase alphanumeric and hyphens)"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Invalid buildpack_id \`${BUILDPACK_ID}\` — expected format: \`owner/name\` (lowercase alphanumeric and hyphens only)." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
       - name: Resolve tag and changes from changelog
         id: tag
         run: |
@@ -333,13 +341,6 @@ jobs:
             echo "::error::Untrusted registry_url '${REGISTRY_URL}' — refusing to send OIDC token"
             echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
             echo "Registry URL \`${REGISTRY_URL}\` is not in the allow-list. OIDC tokens will only be sent to trusted Heroku endpoints." >> "${GITHUB_STEP_SUMMARY}"
-            exit 1
-          fi
-
-          if [[ ! "${BUILDPACK_ID}" =~ ^[a-z0-9-]+/[a-z0-9-]+$ ]]; then
-            echo "::error::Invalid buildpack_id '${BUILDPACK_ID}' — expected format: owner/name (lowercase alphanumeric and hyphens)"
-            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
-            echo "Invalid buildpack_id \`${BUILDPACK_ID}\` — expected format: \`owner/name\` (lowercase alphanumeric and hyphens only)." >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
 
