@@ -376,14 +376,17 @@ jobs:
           # Default --retry transient set (5xx, 429, connection errors) — no --retry-all-errors,
           # so a permanent 4xx (e.g. audience-not-allowed) surfaces immediately rather than
           # waiting through 3 backoffs.
+          oidc_err_log=$(mktemp)
           oidc_response=$(curl -sS --write-out "\n%{http_code}" \
             --retry 3 --retry-delay 5 --max-time 30 \
             -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com") || true
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=buildpack-registry.heroku.com" 2>"${oidc_err_log}") || true
           oidc_http_code=$(echo "${oidc_response}" | tail -1 | tr -d '[:space:]')
           oidc_body=$(echo "${oidc_response}" | sed '$d')
           # On non-2xx, surface the endpoint's response (e.g. audience-not-allowed) rather
           # than collapsing every failure into a generic "could not obtain token" message.
+          # When http_code is empty (DNS, TLS, timeout — no response line at all), the
+          # transport error from curl's stderr is the only signal we have.
           if [[ ! "${oidc_http_code}" =~ ^2[0-9]{2}$ ]]; then
             echo "::error::OIDC token endpoint returned HTTP ${oidc_http_code:-unknown}"
             {
@@ -393,6 +396,13 @@ jobs:
                 echo ""
                 echo '```'
                 echo "${oidc_body:0:500}"
+                echo '```'
+              fi
+              if [[ -s "${oidc_err_log}" ]]; then
+                echo ""
+                echo "Transport error:"
+                echo '```'
+                cat "${oidc_err_log}"
                 echo '```'
               fi
             } >> "${GITHUB_STEP_SUMMARY}"
@@ -422,21 +432,35 @@ jobs:
           # POST /revisions is non-idempotent: the registry creates a new row per call. Stick
           # to the default --retry transient set so a 4xx (validation, ctc_denied, etc.) is
           # surfaced after one attempt instead of being retried into a duplicate-pending race.
+          # Capture stderr so a transport-level failure (DNS, TLS, post-retry connection error)
+          # is visible — without it the diagnostic just says "connection failed after retries"
+          # with no clue why, and this call is non-idempotent so the operator needs to know
+          # whether the request might still have reached the registry.
+          publish_err_log=$(mktemp)
           response=$(curl --silent --show-error --write-out "\n%{http_code}" \
             --retry 3 --retry-delay 5 --max-time 30 \
             --request POST "${PUBLISH_URL}" \
             --header "Accept: application/vnd.heroku+json; version=3.buildpack-registry" \
             --header "Content-Type: application/json" \
             --header "Authorization: Bearer ${OIDC_TOKEN}" \
-            --data "${REQUEST_BODY}") || true
+            --data "${REQUEST_BODY}" 2>"${publish_err_log}") || true
 
           http_code=$(echo "${response}" | tail -1 | tr -d '[:space:]')
           body=$(echo "${response}" | sed '$d')
 
           if [[ -z "${http_code}" ]]; then
             echo "::error::No response from registry (connection failed after retries)"
-            echo "## ${TAG} publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
-            echo "Could not connect to the buildpack registry." >> "${GITHUB_STEP_SUMMARY}"
+            {
+              echo "## ${TAG} publish failed (${MODE})"
+              echo "Could not connect to the buildpack registry."
+              if [[ -s "${publish_err_log}" ]]; then
+                echo ""
+                echo "Transport error:"
+                echo '```'
+                cat "${publish_err_log}"
+                echo '```'
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
 
