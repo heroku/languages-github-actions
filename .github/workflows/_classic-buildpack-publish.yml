@@ -123,6 +123,11 @@ jobs:
             /^## / { flag=0 }
             flag
           ' CHANGELOG.md)
+          # An empty body under a versioned heading is almost always a formatting bug the
+          # author would want flagged. Warn but don't fail — release-creation has a fallback.
+          if [[ -z "${changes//[[:space:]]/}" ]]; then
+            echo "::warning::CHANGELOG section for v${version} is empty — release notes will use a generic fallback"
+          fi
           # Multi-line value: GITHUB_OUTPUT only accepts multi-line strings via the
           # heredoc form. The delimiter must not appear in the content — picking a
           # collision-resistant token rather than the conventional `EOF`.
