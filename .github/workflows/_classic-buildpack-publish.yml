@@ -211,14 +211,24 @@ jobs:
           fi
 
           # Hit the API directly so we can branch on 200 vs 404 vs other rather than
-          # string-matching `gh release view` stderr.
+          # string-matching `gh release view` stderr. Capture stderr so transport-level
+          # failures (DNS, TLS, timeout) — which never produce an HTTP status line — can be
+          # surfaced in the diagnostic instead of being swallowed.
+          release_err_log=$(mktemp)
           release_status=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            -i --silent 2>/dev/null | head -1 | awk '{print $2}') || true
+            -i --silent 2>"${release_err_log}" | head -1 | awk '{print $2}') || true
           case "${release_status}" in
             200) release_exists=true ;;
             404) release_exists=false ;;
             *)
               echo "::error::Unexpected status ${release_status:-unknown} from GitHub releases API for ${TAG}"
+              if [[ -s "${release_err_log}" ]]; then
+                {
+                  echo '```'
+                  cat "${release_err_log}"
+                  echo '```'
+                } >&2
+              fi
               exit 1
               ;;
           esac
