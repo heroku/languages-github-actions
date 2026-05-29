@@ -525,6 +525,11 @@ jobs:
             fi
             case "${error_id}" in
               ctc_denied)
+                # The registry returns the operator's override URL in the response body, but
+                # we don't trust it blindly — a malformed or hostile value could surface as
+                # a clickable link in the step summary and steer operators to an attacker
+                # page. Fall back to the canonical TPS URL when the registry omits the field
+                # or when it doesn't match the heroku.tools / heroku.com domain allow-list.
                 override_url=$(echo "${body}" | jq -r '.override_url // "https://tps.heroku.tools/locks"')
                 if [[ ! "${override_url}" =~ ^https://(.*\.)?(heroku\.tools|heroku\.com)/ ]]; then
                   override_url="https://tps.heroku.tools/locks"
