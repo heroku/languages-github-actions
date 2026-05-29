@@ -152,12 +152,17 @@ jobs:
           # real errors. Once existence is confirmed, resolving the tag with `^{commit}` gets
           # the hash of the actual commit it points to instead of the tag object itself, and
           # cannot fail except on a real error, which we let propagate.
-          if git show-ref --tags --verify --quiet "refs/tags/${TAG}"; then
+          #
+          # Capture the exit code once, then branch — using `$?` directly inside the elif/else
+          # arms would read the result of the preceding `[[ ]]` test, not git's exit code.
+          rc=0
+          git show-ref --tags --verify --quiet "refs/tags/${TAG}" || rc=$?
+          if [[ ${rc} -eq 0 ]]; then
             tag_sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")
-          elif [[ $? -eq 1 ]]; then
+          elif [[ ${rc} -eq 1 ]]; then
             tag_sha=""
           else
-            echo "::error::git show-ref failed unexpectedly for refs/tags/${TAG} (exit $?)"
+            echo "::error::git show-ref failed unexpectedly for refs/tags/${TAG} (exit ${rc})"
             exit 1
           fi
 
