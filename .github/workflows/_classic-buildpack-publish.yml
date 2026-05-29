@@ -149,8 +149,9 @@ jobs:
 
           # Two-step so a corrupt repo / I/O error doesn't get silently treated as "tag absent":
           # `git show-ref --verify --quiet` exits 1 specifically for a missing ref and >1 for
-          # real errors. Once existence is confirmed, peeling to the commit cannot fail except
-          # on a real error, which we let propagate.
+          # real errors. Once existence is confirmed, resolving the tag with `^{commit}` gets
+          # the hash of the actual commit it points to instead of the tag object itself, and
+          # cannot fail except on a real error, which we let propagate.
           if git show-ref --tags --verify --quiet "refs/tags/${TAG}"; then
             tag_sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")
           elif [[ $? -eq 1 ]]; then
