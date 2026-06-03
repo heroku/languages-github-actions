@@ -123,10 +123,14 @@ jobs:
             /^## / { flag=0 }
             flag
           ' CHANGELOG.md)
-          # An empty body under a versioned heading is almost always a formatting bug the
-          # author would want flagged. Warn but don't fail — release-creation has a fallback.
+          # An empty body under a versioned heading is almost always a formatting bug. Fail
+          # fast rather than publishing a release with no notes — a generic fallback body
+          # would hide the mistake and ship a useless release.
           if [[ -z "${changes//[[:space:]]/}" ]]; then
-            echo "::warning::CHANGELOG section for v${version} is empty — release notes will use a generic fallback"
+            echo "::error::CHANGELOG section for v${version} is empty — add release notes under the heading before publishing"
+            echo "## Publish failed (${MODE})" >> "${GITHUB_STEP_SUMMARY}"
+            echo "CHANGELOG section for **v${version}** is empty — add release notes under the heading before publishing." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
           fi
           # Multi-line value: GITHUB_OUTPUT only accepts multi-line strings via the
           # heredoc form. The delimiter must not appear in the content — picking a
@@ -644,15 +648,10 @@ jobs:
           CHANGES: ${{ steps.tag.outputs.changes }}
         run: |
           # Use --notes-file rather than --notes so a multi-line body with backticks,
-          # quotes, and PR links round-trips verbatim — no shell-escaping risk.
+          # quotes, and PR links round-trips verbatim — no shell-escaping risk. The resolve
+          # step already guaranteed CHANGES is non-empty (it fails the run otherwise).
           notes_file=$(mktemp)
-          if [[ -n "${CHANGES//[[:space:]]/}" ]]; then
-            printf '%s\n' "${CHANGES}" > "${notes_file}"
-          else
-            # Fallback: heading matched but the section body was empty (or whitespace-only).
-            # A bare link beats publishing an empty release body.
-            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." > "${notes_file}"
-          fi
+          printf '%s\n' "${CHANGES}" > "${notes_file}"
 
           # Drafts in qa keep staging releases out of the public releases list.
           draft_flag=""
