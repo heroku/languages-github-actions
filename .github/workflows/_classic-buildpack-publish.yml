@@ -25,6 +25,12 @@ on:
           Slack Workflow Builder webhook URL for #heroku-languages-ops. A message is posted
           here if a production publish fails.
         required: true
+      honeycomb_api_key:
+        description: >-
+          Honeycomb env API key with the 'create markers' scope. When set, a release
+          marker is posted to the `builds` dataset on a successful production publish.
+          Omit to disable (no-op for callers that don't opt in).
+        required: false
 
 # Full set of permissions the CALLING workflow must grant — a reusable workflow's GITHUB_TOKEN
 # is capped by what the caller provides. Each job below narrows to only what it needs via its
