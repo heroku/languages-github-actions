@@ -43,8 +43,17 @@ jobs:
     # github.sha to the merge commit, so the default-branch guard below still holds). The
     # allow-list keeps `pull_request_target` and `workflow_run` callers out: those run with
     # elevated tokens in unusual ref contexts and are not legitimate triggers for a publish.
+    #
+    # The `merged == true` check is the one caller precondition we enforce here rather than
+    # leaving to the caller: an unmerged `pull_request` event (opened/synchronize/closed-
+    # without-merge) does NOT point github.ref/github.sha at a merge commit on the default
+    # branch, so the assumption the rest of this workflow relies on would not hold. We
+    # intentionally do NOT mirror the caller's other gates (head.ref == release branch,
+    # bot author) — those are caller-specific routing concerns (which PR is *the* release
+    # PR), whereas "this is a real merge" is a universal precondition for any publish.
     if: |
       contains(fromJSON('["workflow_dispatch","pull_request"]'), github.event_name)
+      && (github.event_name != 'pull_request' || github.event.pull_request.merged == true)
       && (inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: pub-hk-ubuntu-24.04-ip
     # Single source of truth for the qa-vs-production routing — every step that needs the
