@@ -38,11 +38,13 @@ jobs:
     # ref. Privilege escalation is bounded by the registry's OIDC trust policy (which pins
     # repo + workflow path) — this guard is a convenience, not the security boundary.
     #
-    # The event_name allow-list keeps `pull_request_target` and `workflow_run` callers out:
-    # those run with elevated tokens in unusual ref contexts and are not legitimate triggers
-    # for a release publish.
+    # The legitimate triggers are `workflow_dispatch` (manual / QA) and `pull_request` (the
+    # merged "Prepare release" PR — on which GitHub sets github.ref to the base branch and
+    # github.sha to the merge commit, so the default-branch guard below still holds). The
+    # allow-list keeps `pull_request_target` and `workflow_run` callers out: those run with
+    # elevated tokens in unusual ref contexts and are not legitimate triggers for a publish.
     if: |
-      contains(fromJSON('["push","workflow_dispatch"]'), github.event_name)
+      contains(fromJSON('["workflow_dispatch","pull_request"]'), github.event_name)
       && (inputs.qa || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: pub-hk-ubuntu-24.04-ip
     # Single source of truth for the qa-vs-production routing — every step that needs the
