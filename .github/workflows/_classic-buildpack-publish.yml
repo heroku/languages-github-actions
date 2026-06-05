@@ -13,7 +13,7 @@ on:
         required: false
         default: false
     secrets:
-      slack_webhook_url:
+      SLACK_WEBHOOK_URL:
         description: >-
           Slack Workflow Builder webhook URL for #heroku-languages-ops. When set, a message
           is posted if a production publish fails. Omit to disable (no-op for callers that
@@ -60,9 +60,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BUILDPACK_ID: ${{ inputs.buildpack_id }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
-          gh pr comment "$PR_NUMBER" --body "📦 Publishing \`${BUILDPACK_ID}\` — workflow started: $RUN_URL"
+          run_url="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
+          gh pr comment "$PR_NUMBER" --body "📦 Publishing \`${BUILDPACK_ID}\` — workflow started: $run_url"
 
   publish:
     name: Publish
@@ -721,3 +724,50 @@ jobs:
             } >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
+
+  notify-failure:
+    name: Notify Publish Failure
+    needs: [publish]
+    # `failure()` here is scoped to `needs` (the publish job). A skipped publish (its `if:`
+    # evaluated false) yields failure() == false, so no spurious "failed" comment fires.
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write     # comment on the triggering prepare-release PR
+    env:
+      MODE: ${{ inputs.qa && 'qa' || 'production' }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - name: Comment failure on prepare PR
+        if: github.event_name == 'pull_request' && !inputs.qa
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          run_url="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
+          gh pr comment "$PR_NUMBER" --body "❌ Publish of \`${BUILDPACK_ID}\` failed — see $run_url"
+
+      - name: Notify Slack
+        # Production failures only, and only when the caller opted in by passing the webhook.
+        # Secrets can't be referenced in `if:`, so the URL is mirrored to env and tested there.
+        if: env.MODE == 'production' && env.SLACK_WEBHOOK_URL
+        env:
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          # Build the JSON with jq from shell variables rather than splicing values into a string
+          # literal, so buildpack_id can't break out of the payload.
+          message="Classic buildpack publish failed: ${BUILDPACK_ID}"
+          run_url="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
+          curl -sS --retry 3 --retry-all-errors --max-time 30 \
+            -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-type: application/json' \
+            --data "$(jq -n --arg msg "$message" --arg url "$run_url" \
+              '{message: $msg, run_url: $url}')"
