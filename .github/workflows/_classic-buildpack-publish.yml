@@ -20,9 +20,14 @@ on:
           don't opt in).
         required: false
 
+# Full set of permissions the CALLING workflow must grant — a reusable workflow's GITHUB_TOKEN
+# is capped by what the caller provides. Each job below narrows to only what it needs via its
+# own `permissions:` block (the actual enforcement): `publish` never carries `pull-requests`,
+# and the notify jobs never carry `id-token`/`contents`.
 permissions:
   id-token: write
   contents: write
+  pull-requests: write
 
 # Serialize publishes per buildpack so two rapid prepare-release merges (or a re-run racing a
 # fresh trigger) queue rather than racing the pre-flight check and the tag/registry/release
@@ -41,6 +46,9 @@ defaults:
 jobs:
   publish:
     name: Publish
+    permissions:
+      id-token: write     # OIDC token mint for the buildpack registry
+      contents: write     # push the version tag + create the GitHub Release
     # QA mode bypasses the default-branch guard so staging publishes can be exercised from any
     # ref. Privilege escalation is bounded by the registry's OIDC trust policy (which pins
     # repo + workflow path) — this guard is a convenience, not the security boundary.
