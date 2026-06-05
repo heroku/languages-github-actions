@@ -12,6 +12,13 @@ on:
         type: boolean
         required: false
         default: false
+    secrets:
+      slack_webhook_url:
+        description: >-
+          Slack Workflow Builder webhook URL for #heroku-languages-ops. When set, a message
+          is posted if a production publish fails. Omit to disable (no-op for callers that
+          don't opt in).
+        required: false
 
 permissions:
   id-token: write
