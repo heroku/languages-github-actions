@@ -47,9 +47,14 @@ jobs:
   notify-start:
     name: Notify Publish Started
     # Only the merged "Prepare release" PR has a thread to comment on, and that trigger is
-    # always production. The explicit `!inputs.qa` is defensive against any future QA path
-    # that might ride a pull_request event.
-    if: github.event_name == 'pull_request' && !inputs.qa
+    # always production. The `merged == true` guard mirrors the publish job's universal
+    # precondition so a non-merge pull_request event (opened/synchronize/closed-without-merge)
+    # can't post a false "publishing started" comment while publish itself skips. The explicit
+    # `!inputs.qa` is defensive against any future QA path that might ride a pull_request event.
+    if: |
+      github.event_name == 'pull_request'
+      && github.event.pull_request.merged == true
+      && !inputs.qa
     runs-on: ubuntu-24.04
     permissions:
       pull-requests: write     # comment on the triggering prepare-release PR
@@ -740,6 +745,9 @@ jobs:
     steps:
       - name: Comment failure on prepare PR
         if: github.event_name == 'pull_request' && !inputs.qa
+        # Best-effort: a transient PR-comment failure must not abort the job before the more
+        # important production Slack alert (next step) gets a chance to fire.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -766,7 +774,10 @@ jobs:
           # literal, so buildpack_id can't break out of the payload.
           message="Classic buildpack publish failed: ${BUILDPACK_ID}"
           run_url="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
-          curl -sS --retry 3 --retry-all-errors --max-time 30 \
+          # --fail-with-body makes curl exit non-zero on an HTTP 4xx/5xx (e.g. a revoked webhook
+          # returning 404 no_service) instead of silently "succeeding" — a dead webhook should
+          # surface as a failed step rather than a missed alert.
+          curl -sS --fail-with-body --retry 3 --retry-all-errors --max-time 30 \
             -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
             --data "$(jq -n --arg msg "$message" --arg url "$run_url" \
