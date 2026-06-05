@@ -44,6 +44,26 @@ defaults:
     shell: bash
 
 jobs:
+  notify-start:
+    name: Notify Publish Started
+    # Only the merged "Prepare release" PR has a thread to comment on, and that trigger is
+    # always production. The explicit `!inputs.qa` is defensive against any future QA path
+    # that might ride a pull_request event.
+    if: github.event_name == 'pull_request' && !inputs.qa
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write     # comment on the triggering prepare-release PR
+    steps:
+      - name: Comment on prepare PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "📦 Publishing \`${BUILDPACK_ID}\` — workflow started: $RUN_URL"
+
   publish:
     name: Publish
     permissions:
