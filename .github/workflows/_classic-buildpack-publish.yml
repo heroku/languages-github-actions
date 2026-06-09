@@ -12,22 +12,29 @@ on:
         type: boolean
         required: false
         default: false
+      app_id:
+        description: Application ID of the GitHub application (e.g. the Linguist App) used to comment on the prepare PR and author the GitHub Release.
+        type: string
+        required: true
     secrets:
-      SLACK_WEBHOOK_URL:
+      app_private_key:
+        description: Private key of the GitHub application (e.g. the Linguist App).
+        required: true
+      slack_webhook_url:
         description: >-
-          Slack Workflow Builder webhook URL for #heroku-languages-ops. When set, a message
-          is posted if a production publish fails. Omit to disable (no-op for callers that
-          don't opt in).
-        required: false
+          Slack Workflow Builder webhook URL for #heroku-languages-ops. A message is posted
+          here if a production publish fails.
+        required: true
 
 # Full set of permissions the CALLING workflow must grant — a reusable workflow's GITHUB_TOKEN
 # is capped by what the caller provides. Each job below narrows to only what it needs via its
-# own `permissions:` block (the actual enforcement): `publish` never carries `pull-requests`,
-# and the notify jobs never carry `id-token`/`contents`.
+# own `permissions:` block (the actual enforcement). PR comments and the GitHub Release are
+# authored by the Linguist GitHub App token (minted per-job from `app_id`/`app_private_key`),
+# matching the CNB release automation — so the notify jobs need no GITHUB_TOKEN scopes at all,
+# and `publish` only needs `id-token` (OIDC mint) plus `contents` (push the version tag).
 permissions:
   id-token: write
   contents: write
-  pull-requests: write
 
 # Serialize publishes per buildpack so two rapid prepare-release merges (or a re-run racing a
 # fresh trigger) queue rather than racing the pre-flight check and the tag/registry/release
@@ -55,22 +62,27 @@ jobs:
       github.event_name == 'pull_request'
       && github.event.pull_request.merged == true
       && !inputs.qa
-    runs-on: ubuntu-24.04
-    permissions:
-      pull-requests: write     # comment on the triggering prepare-release PR
+    # Runs on the IP-allowlisted runner because the Linguist App token mint hits the heroku
+    # org's IP allow list, which GitHub-hosted runners aren't on. The comment is authored by
+    # the App token (not github.token), so the job needs no GITHUB_TOKEN scopes of its own.
+    runs-on: pub-hk-ubuntu-24.04-ip
+    permissions: {}
     steps:
+      - name: Get token for prepare PR comment
+        uses: actions/create-github-app-token@v3
+        id: comment-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
       - name: Comment on prepare PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.comment-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BUILDPACK_ID: ${{ inputs.buildpack_id }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          SERVER_URL: ${{ github.server_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          run_url="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
-          gh pr comment "$PR_NUMBER" --body "📦 Publishing \`${BUILDPACK_ID}\` — workflow started: $run_url"
+          gh pr comment "$PR_NUMBER" --body "Release workflow started: $RUN_URL"
 
   publish:
     name: Publish
@@ -694,10 +706,20 @@ jobs:
           echo "The publish may still complete. Re-run this workflow to check (idempotent recovery)." >> "${GITHUB_STEP_SUMMARY}"
           exit 1
 
+      # Author the Release as the Linguist App. Minted here in the publish job, which already
+      # runs on the IP-allowlisted runner the App token mint requires.
+      - name: Get token for GitHub Release
+        if: steps.preflight.outputs.release_exists != 'true'
+        uses: actions/create-github-app-token@v3
+        id: release-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
       - name: Create GitHub Release
         if: steps.preflight.outputs.release_exists != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
           TAG: ${{ steps.tag.outputs.name }}
           CHANGES: ${{ steps.tag.outputs.changes }}
         run: |
@@ -734,36 +756,38 @@ jobs:
     name: Notify Publish Failure
     needs: [publish]
     # `failure()` here is scoped to `needs` (the publish job). A skipped publish (its `if:`
-    # evaluated false) yields failure() == false, so no spurious "failed" comment fires.
-    if: failure()
-    runs-on: ubuntu-24.04
-    permissions:
-      pull-requests: write     # comment on the triggering prepare-release PR
+    # evaluated false) yields failure() == false, so no spurious "failed" notification fires.
+    # Notifications are only for the real release path: a merged prepare PR. Manual
+    # `workflow_dispatch` runs are for testing and stay silent, and QA runs never notify — so
+    # both gates live here rather than being repeated on every step below.
+    if: failure() && github.event_name == 'pull_request' && !inputs.qa
+    # Runs on the IP-allowlisted runner because the Linguist App token mint hits the heroku
+    # org's IP allow list. The comment is authored by the App token, so no GITHUB_TOKEN scopes.
+    runs-on: pub-hk-ubuntu-24.04-ip
+    permissions: {}
     env:
-      MODE: ${{ inputs.qa && 'qa' || 'production' }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      # Secrets can't be referenced in an `if:`, so mirror the webhook to env and test it there.
+      SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
     steps:
+      - name: Get token for prepare PR comment
+        uses: actions/create-github-app-token@v3
+        id: comment-token
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
       - name: Comment failure on prepare PR
-        if: github.event_name == 'pull_request' && !inputs.qa
-        # Best-effort: a transient PR-comment failure must not abort the job before the more
-        # important production Slack alert (next step) gets a chance to fire.
-        continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.comment-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BUILDPACK_ID: ${{ inputs.buildpack_id }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          SERVER_URL: ${{ github.server_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          run_url="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
-          gh pr comment "$PR_NUMBER" --body "❌ Publish of \`${BUILDPACK_ID}\` failed — see $run_url"
+          gh pr comment "$PR_NUMBER" --body "Release workflow finished with failures — see the workflow run at $RUN_URL"
 
       - name: Notify Slack
-        # Production failures only, and only when the caller opted in by passing the webhook.
-        # Secrets can't be referenced in `if:`, so the URL is mirrored to env and tested there.
-        if: env.MODE == 'production' && env.SLACK_WEBHOOK_URL
+        # `always()` so that a failed comment step doesn't block the slack notification.
+        if: always()
         env:
           BUILDPACK_ID: ${{ inputs.buildpack_id }}
           REPO: ${{ github.repository }}
