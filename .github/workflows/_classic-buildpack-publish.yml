@@ -52,7 +52,7 @@ defaults:
 
 jobs:
   notify-start:
-    name: Notify Publish Started
+    name: Notify Release Started
     # Only the merged "Prepare release" PR has a thread to comment on, and that trigger is
     # always production. The `merged == true` guard mirrors the publish job's universal
     # precondition so a non-merge pull_request event (opened/synchronize/closed-without-merge)
@@ -753,7 +753,7 @@ jobs:
           fi
 
   notify-failure:
-    name: Notify Publish Failure
+    name: Notify Release Failure
     needs: [publish]
     # `failure()` here is scoped to `needs` (the publish job). A skipped publish (its `if:`
     # evaluated false) yields failure() == false, so no spurious "failed" notification fires.
