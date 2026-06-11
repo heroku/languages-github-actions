@@ -775,18 +775,17 @@ jobs:
           auth=(-H "X-Honeycomb-Team: ${HONEYCOMB_API_KEY}" -H "Content-Type: application/json")
 
           # Dedup on the release URL: stable identity for this release. A re-run of an idempotent
-          # publish updates the existing marker rather than stacking a duplicate line on the board.
-          # Every path below warns on failure and never exits non-zero — a Honeycomb outage must
-          # not fail an already-successful publish.
-          existing=$(curl -sS --retry 3 --retry-all-errors --max-time 30 "${auth[@]}" "${api}" \
-            | jq -r --arg url "$url" 'map(select(.url == $url)) | first | .id // empty' 2>/dev/null) || existing=""
+          # publish finds the existing marker and skips, rather than stacking a duplicate line on
+          # the board. The marker content is fully derived from the tag, so there's nothing to
+          # update. This warns on failure and never exits non-zero — a Honeycomb outage must not
+          # fail an already-successful publish.
+          existing=$(curl -sS --fail --connect-timeout 10 --retry 3 --retry-all-errors --max-time 30 "${auth[@]}" "${api}" \
+            | jq -r --arg url "$url" 'map(select(.url == $url)) | first | .id // empty') || existing=""
 
           if [[ -n "$existing" ]]; then
-            curl -sS --retry 3 --retry-all-errors --max-time 30 -X PUT "${api}/${existing}" "${auth[@]}" -d "${body}" \
-              >/dev/null && echo "Updated existing release marker (${existing})" \
-              || echo "::warning::Failed to update Honeycomb release marker (publish succeeded regardless)"
+            echo "Release marker already exists (${existing}) — skipping"
           else
-            curl -sS --retry 3 --retry-all-errors --max-time 30 -X POST "${api}" "${auth[@]}" -d "${body}" \
+            curl -sS --fail --connect-timeout 10 --retry 3 --retry-all-errors --max-time 30 -X POST "${api}" "${auth[@]}" -d "${body}" \
               >/dev/null && echo "Created release marker for ${TAG}" \
               || echo "::warning::Failed to create Honeycomb release marker (publish succeeded regardless)"
           fi
