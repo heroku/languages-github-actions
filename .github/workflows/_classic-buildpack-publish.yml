@@ -771,24 +771,31 @@ jobs:
           api="https://api.honeycomb.io/1/markers/${HONEYCOMB_DATASET}"
           url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
           msg="${BUILDPACK_ID} ${TAG}"
-          body=$(jq -n --arg msg "$msg" --arg url "$url" '{message: $msg, type: "deploy", url: $url}')
-          auth=(-H "X-Honeycomb-Team: ${HONEYCOMB_API_KEY}" -H "Content-Type: application/json")
+          # Anchor the marker to the release commit time, not "now": this step may run delayed
+          # after a re-trigger, and the commit timestamp is stable across re-runs. The repo is
+          # checked out at the commit being published (fetch-depth: 0), so HEAD is that commit.
+          start_time=$(git log -1 --format=%ct)
+          curl=(curl -sS --fail --connect-timeout 10 --retry 3 --retry-all-errors --max-time 30
+            -H "X-Honeycomb-Team: ${HONEYCOMB_API_KEY}" -H "Content-Type: application/json")
 
           # Dedup on the release URL: stable identity for this release. A re-run of an idempotent
           # publish finds the existing marker and skips, rather than stacking a duplicate line on
           # the board. The marker content is fully derived from the tag, so there's nothing to
-          # update. This warns on failure and never exits non-zero — a Honeycomb outage must not
-          # fail an already-successful publish.
-          existing=$(curl -sS --fail --connect-timeout 10 --retry 3 --retry-all-errors --max-time 30 "${auth[@]}" "${api}" \
-            | jq -r --arg url "$url" 'map(select(.url == $url)) | first | .id // empty') || existing=""
+          # update. This step is the last in the workflow and runs after the release has already
+          # published, so letting it fail red on a Honeycomb error surfaces the problem
+          # (retry/bug) without blocking the already-successful release.
+          existing=$("${curl[@]}" "${api}" \
+            | jq -r --arg url "$url" 'map(select(.url == $url)) | first | .id // empty')
 
           if [[ -n "$existing" ]]; then
             echo "Release marker already exists (${existing}) — skipping"
-          else
-            curl -sS --fail --connect-timeout 10 --retry 3 --retry-all-errors --max-time 30 -X POST "${api}" "${auth[@]}" -d "${body}" \
-              >/dev/null && echo "Created release marker for ${TAG}" \
-              || echo "::warning::Failed to create Honeycomb release marker (publish succeeded regardless)"
+            exit 0
           fi
+
+          body=$(jq -n --arg msg "$msg" --arg url "$url" --argjson start "$start_time" \
+            '{message: $msg, type: "deploy", url: $url, start_time: $start}')
+          "${curl[@]}" -X POST "${api}" -d "${body}"
+          echo "Created release marker for ${TAG}"
 
   notify-failure:
     name: Notify Release Failure
