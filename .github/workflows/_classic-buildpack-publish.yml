@@ -25,6 +25,12 @@ on:
           Slack Workflow Builder webhook URL for #heroku-languages-ops. A message is posted
           here if a production publish fails.
         required: true
+      honeycomb_api_key:
+        description: >-
+          Honeycomb env API key with the 'create markers' scope. When set, a release
+          marker is posted to the `builds` dataset on a successful production publish.
+          Omit to disable (no-op for callers that don't opt in).
+        required: false
 
 # Full set of permissions the CALLING workflow must grant — a reusable workflow's GITHUB_TOKEN
 # is capped by what the caller provides. Each job below narrows to only what it needs via its
@@ -751,6 +757,45 @@ jobs:
             } >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
+
+      - name: Post Honeycomb release marker
+        # No-op when the secret is absent (other teams) or in QA mode. Secrets can't be
+        # referenced in `if:`, so the key is mirrored to env and tested there.
+        if: env.HONEYCOMB_API_KEY != '' && env.MODE == 'production'
+        env:
+          HONEYCOMB_API_KEY: ${{ secrets.honeycomb_api_key }}
+          HONEYCOMB_DATASET: builds          # shared dataset for all classic buildpacks
+          BUILDPACK_ID: ${{ inputs.buildpack_id }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          api="https://api.honeycomb.io/1/markers/${HONEYCOMB_DATASET}"
+          url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          msg="${BUILDPACK_ID} ${TAG}"
+          # Anchor the marker to the release commit time, not "now": this step may run delayed
+          # after a re-trigger, and the commit timestamp is stable across re-runs. The repo is
+          # checked out at the commit being published (fetch-depth: 0), so HEAD is that commit.
+          start_time=$(git log -1 --format=%ct)
+          curl=(curl -sS --fail --connect-timeout 10 --retry 3 --retry-all-errors --max-time 30
+            -H "X-Honeycomb-Team: ${HONEYCOMB_API_KEY}" -H "Content-Type: application/json")
+
+          # Dedup on the release URL: stable identity for this release. A re-run of an idempotent
+          # publish finds the existing marker and skips, rather than stacking a duplicate line on
+          # the board. The marker content is fully derived from the tag, so there's nothing to
+          # update. This step is the last in the workflow and runs after the release has already
+          # published, so letting it fail red on a Honeycomb error surfaces the problem
+          # (retry/bug) without blocking the already-successful release.
+          existing=$("${curl[@]}" "${api}" \
+            | jq -r --arg url "$url" 'map(select(.url == $url)) | first | .id // empty')
+
+          if [[ -n "$existing" ]]; then
+            echo "Release marker already exists (${existing}) — skipping"
+            exit 0
+          fi
+
+          body=$(jq -n --arg msg "$msg" --arg url "$url" --argjson start "$start_time" \
+            '{message: $msg, type: "deploy", url: $url, start_time: $start}')
+          "${curl[@]}" -X POST "${api}" -d "${body}"
+          echo "Created release marker for ${TAG}"
 
   notify-failure:
     name: Notify Release Failure
