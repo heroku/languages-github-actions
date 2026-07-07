@@ -76,7 +76,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: comment-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Notify release started on prepare PR
@@ -371,7 +371,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: generate-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Check if release exists
@@ -439,7 +439,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: generate-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
           owner: heroku
           repositories: cnb-builder-images
@@ -515,7 +515,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: comment-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Notify builder PR opened on prepare PR
@@ -540,7 +540,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: comment-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Notify release failure on prepare PR
