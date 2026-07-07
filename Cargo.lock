@@ -183,9 +183,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
+checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
 dependencies = [
  "bit-set",
  "regex-automata",
@@ -340,9 +340,9 @@ checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "libcnb-common"
-version = "0.30.4"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dcbb67b3f0075de818046a674c3e6f4cd59e78c8e5d1716f768799460451ec4"
+checksum = "37fe6255e60d54d345ceb872c1ec4ab246354270476c5b925546f56ffd8240e5"
 dependencies = [
  "serde",
  "thiserror",
@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-data"
-version = "0.30.4"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65a8aea899a7a5260fb06ee629887bdc97c23169969d7c26252c0654116756c8"
+checksum = "69904cf6f9d446ec0a763a806d4ac8077a9c9460cb3d403c2160810d8539daa1"
 dependencies = [
  "fancy-regex",
  "libcnb-proc-macros",
@@ -365,9 +365,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-package"
-version = "0.30.4"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fdc4184afd713861b296dd886491765cf8c151c5c2608d467cd42077efe9db2"
+checksum = "6bfcc8dcb67cbdd8938a47ce415cef965bfa186f645106e109f90f16f69cb297"
 dependencies = [
  "cargo_metadata",
  "ignore",
@@ -382,9 +382,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-proc-macros"
-version = "0.30.4"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67ce63474a40ddad15c3405e069d7fa1bed0fddad0da742c9b910a94d6ea415d"
+checksum = "b5a207308d8093481af32e1c123e194e1efcf176be02c08e33b8f576eb479b62"
 dependencies = [
  "cargo_metadata",
  "fancy-regex",
