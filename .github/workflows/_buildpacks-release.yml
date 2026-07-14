@@ -91,6 +91,11 @@ jobs:
   compile:
     name: Compile Buildpacks
     runs-on: ubuntu-24.04
+    # Required by actions/cache/save@v6: writing to the GitHub Actions cache
+    # requires the `actions: write` scope on the workflow token. Reading from
+    # the cache does not, so publish jobs keep the top-level `permissions: {}`.
+    permissions:
+      actions: write
     outputs:
       buildpacks: ${{ steps.generate-buildpack-matrix.outputs.buildpacks }}
       version: ${{ steps.generate-buildpack-matrix.outputs.version }}
