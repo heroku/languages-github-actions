@@ -198,11 +198,23 @@ jobs:
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
 
-      - name: Cache buildpacks
-        uses: actions/cache/save@v6
+      # Hand the compiled buildpacks to the publish jobs as an artifact. This
+      # is a within-run transfer, and an artifact upload works regardless of
+      # how the caller triggers this workflow, whereas an Actions cache write
+      # does not: GitHub's 2026-06-26 read-only-cache-for-untrusted-triggers
+      # change denies cache writes on untrusted triggers such as
+      # `pull_request` (the auto-release-on-merge path). `if-no-files-found:
+      # error` surfaces a packaging failure in this job rather than downstream;
+      # `include-hidden-files` includes dotfiles in the upload. See
+      # heroku/languages-github-actions#383.
+      - name: Upload compiled buildpacks
+        uses: actions/upload-artifact@v7
         with:
-          key: ${{ github.run_id }}-compiled-buildpacks
+          name: compiled-buildpacks
           path: ${{ env.PACKAGE_DIR }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
   publish-docker:
     name: Publish → Docker - ${{ matrix.buildpack_id }}
@@ -223,14 +235,11 @@ jobs:
         with:
           submodules: true
 
-      - name: Restore buildpacks
-        uses: actions/cache/restore@v6
+      - name: Download compiled buildpacks
+        uses: actions/download-artifact@v8
         with:
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-compiled-buildpacks
+          name: compiled-buildpacks
           path: ${{ env.PACKAGE_DIR }}
-        env:
-          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
@@ -344,14 +353,11 @@ jobs:
         with:
           submodules: true
 
-      - name: Restore buildpacks
-        uses: actions/cache/restore@v6
+      - name: Download compiled buildpacks
+        uses: actions/download-artifact@v8
         with:
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-compiled-buildpacks
+          name: compiled-buildpacks
           path: ${{ env.PACKAGE_DIR }}
-        env:
-          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
