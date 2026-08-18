@@ -135,7 +135,7 @@ jobs:
           done
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
@@ -233,10 +233,10 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
+        uses: buildpacks/github-actions/setup-pack@36416a96be10a6cc7170e7c9c63656d4092f78b2 # v6.1.0
 
       - name: Install Crane
-        uses: buildpacks/github-actions/setup-tools@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
+        uses: buildpacks/github-actions/setup-tools@36416a96be10a6cc7170e7c9c63656d4092f78b2 # v6.1.0
 
       - name: Login to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -354,7 +354,7 @@ jobs:
           SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
+        uses: buildpacks/github-actions/setup-pack@36416a96be10a6cc7170e7c9c63656d4092f78b2 # v6.1.0
 
       - name: Generate CNB files
         run: |
@@ -400,7 +400,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
+        uses: buildpacks/github-actions/setup-tools@36416a96be10a6cc7170e7c9c63656d4092f78b2 # v6.1.0
 
       - name: Check if version is already in the registry
         id: check
@@ -459,7 +459,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
+        uses: buildpacks/github-actions/setup-tools@36416a96be10a6cc7170e7c9c63656d4092f78b2 # v6.1.0
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
