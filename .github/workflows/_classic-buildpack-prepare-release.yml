@@ -40,7 +40,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: generate-token
         with:
-          app-id: ${{ vars.LINGUIST_GH_APP_ID }}
+          client-id: ${{ vars.LINGUIST_GH_APP_ID }}
           # Note: The calling workflow must enable secrets inheritance for this variable to be accessible:
           # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idsecretsinherit
           private-key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}

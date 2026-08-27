@@ -78,7 +78,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: comment-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Comment on prepare PR
@@ -719,7 +719,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: release-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Create GitHub Release
@@ -818,7 +818,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: comment-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Comment failure on prepare PR
