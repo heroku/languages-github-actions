@@ -198,22 +198,23 @@ jobs:
         id: generate-changelog
         run: actions generate-changelog --version ${{ steps.generate-buildpack-matrix.outputs.version }}
 
-      # Hand the compiled buildpacks to the publish jobs as an artifact. This
-      # is a within-run transfer, and an artifact upload works regardless of
-      # how the caller triggers this workflow, whereas an Actions cache write
-      # does not: GitHub's 2026-06-26 read-only-cache-for-untrusted-triggers
-      # change denies cache writes on untrusted triggers such as
-      # `pull_request` (the auto-release-on-merge path). `if-no-files-found:
-      # error` surfaces a packaging failure in this job rather than downstream;
-      # `include-hidden-files` includes dotfiles in the upload. See
-      # heroku/languages-github-actions#383.
+      # Hand the compiled buildpacks to the publish jobs as a single tar
+      # artifact to preserve permissions and symlink.
+      # Using an artifact (rather than a cache) works regardless of how the
+      # caller triggers this workflow. See https://github.com/heroku/languages-github-actions/issues/383.
+      - name: Archive compiled buildpacks
+        run: |
+          if [ -z "$(find "${PACKAGE_DIR}" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+            echo "::error::No compiled buildpacks found in ${PACKAGE_DIR}"
+            exit 1
+          fi
+          tar --create --file compiled-buildpacks.tar --directory "${PACKAGE_DIR}" .
       - name: Upload compiled buildpacks
         uses: actions/upload-artifact@v7
         with:
           name: compiled-buildpacks
-          path: ${{ env.PACKAGE_DIR }}
+          path: compiled-buildpacks.tar
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
 
   publish-docker:
@@ -239,7 +240,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: compiled-buildpacks
-          path: ${{ env.PACKAGE_DIR }}
+      - name: Extract compiled buildpacks
+        run: |
+          mkdir -p "${PACKAGE_DIR}"
+          tar --extract --preserve-permissions --file compiled-buildpacks.tar --directory "${PACKAGE_DIR}"
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
@@ -357,7 +361,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: compiled-buildpacks
-          path: ${{ env.PACKAGE_DIR }}
+      - name: Extract compiled buildpacks
+        run: |
+          mkdir -p "${PACKAGE_DIR}"
+          tar --extract --preserve-permissions --file compiled-buildpacks.tar --directory "${PACKAGE_DIR}"
 
       - name: Install Pack CLI
         uses: buildpacks/github-actions/setup-pack@c1c71086a0e89a65c04ea113390227fd7f05d9df # v6.0.0
