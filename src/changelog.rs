@@ -72,13 +72,11 @@ impl TryFrom<&str> for Changelog {
                 let start = body_nodes
                     .iter()
                     .next()
-                    .map(|node| node.position().map(|position| position.start.offset))
-                    .unwrap_or_default();
+                    .map_or_default(|node| node.position().map(|position| position.start.offset));
                 let end = body_nodes
                     .iter()
                     .last()
-                    .map(|node| node.position().map(|position| position.end.offset))
-                    .unwrap_or_default();
+                    .map_or_default(|node| node.position().map(|position| position.end.offset));
 
                 let body = if let (Some(start), Some(end)) = (start, end) {
                     &value[start..end]
