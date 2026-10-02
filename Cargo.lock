@@ -131,7 +131,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn",
 ]
 
 [[package]]
@@ -183,9 +183,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.18.0"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
 dependencies = [
  "bit-set",
  "regex-automata",
@@ -340,9 +340,9 @@ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "libcnb-common"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37fe6255e60d54d345ceb872c1ec4ab246354270476c5b925546f56ffd8240e5"
+checksum = "b0a588d63fe3cca231aabc105723e3168ce300de8ecc894c5dc650fa31cf1eae"
 dependencies = [
  "serde",
  "thiserror",
@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-data"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69904cf6f9d446ec0a763a806d4ac8077a9c9460cb3d403c2160810d8539daa1"
+checksum = "69958e1d6e6fa4e57e4dd1e2d640faf1b19d347d970f5fb19a75352adb8a7bfa"
 dependencies = [
  "fancy-regex",
  "libcnb-proc-macros",
@@ -365,9 +365,9 @@ dependencies = [
 
 [[package]]
 name = "libcnb-package"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bfcc8dcb67cbdd8938a47ce415cef965bfa186f645106e109f90f16f69cb297"
+checksum = "4af381edd5e18aac7aee0b31d32909de99a81c59b1a05035e8b1c7e1dfc39d6e"
 dependencies = [
  "cargo_metadata",
  "ignore",
@@ -382,14 +382,14 @@ dependencies = [
 
 [[package]]
 name = "libcnb-proc-macros"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5a207308d8093481af32e1c123e194e1efcf176be02c08e33b8f576eb479b62"
+checksum = "cb625338870ddb19dc5a239f69113ffeb402ed3825d757787545f4897f2694d8"
 dependencies = [
  "cargo_metadata",
  "fancy-regex",
  "quote",
- "syn 2.0.119",
+ "syn",
 ]
 
 [[package]]
@@ -563,7 +563,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn",
 ]
 
 [[package]]
@@ -586,17 +586,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "syn"
-version = "2.0.119"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-ident",
 ]
 
 [[package]]
@@ -640,7 +629,7 @@ checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn",
 ]
 
 [[package]]
