@@ -74,7 +74,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: generate-token
         with:
-          app-id: ${{ inputs.app_id }}
+          client-id: ${{ inputs.app_id }}
           private-key: ${{ secrets.app_private_key }}
 
       - name: Checkout
