@@ -135,7 +135,7 @@ jobs:
           done
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # the version of `libcnb-cargo` installed here is kept in sync with the version of `libcnb-package`
       # that the release automation CLI tooling depends on
@@ -246,13 +246,13 @@ jobs:
           tar --extract --preserve-permissions --file compiled-buildpacks.tar --directory "${PACKAGE_DIR}"
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@af8c06ccd592e27001cbf78083dcc9b47aa6652a # v6.1.1
+        uses: buildpacks/github-actions/setup-pack@324e5c43145b68f60bf74a269f5ba7b2969e03db # v6.2.1
 
       - name: Install Crane
-        uses: buildpacks/github-actions/setup-tools@af8c06ccd592e27001cbf78083dcc9b47aa6652a # v6.1.1
+        uses: buildpacks/github-actions/setup-tools@324e5c43145b68f60bf74a269f5ba7b2969e03db # v6.2.1
 
       - name: Login to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: docker.io
           username: ${{ secrets.docker_hub_user }}
@@ -367,7 +367,7 @@ jobs:
           tar --extract --preserve-permissions --file compiled-buildpacks.tar --directory "${PACKAGE_DIR}"
 
       - name: Install Pack CLI
-        uses: buildpacks/github-actions/setup-pack@af8c06ccd592e27001cbf78083dcc9b47aa6652a # v6.1.1
+        uses: buildpacks/github-actions/setup-pack@324e5c43145b68f60bf74a269f5ba7b2969e03db # v6.2.1
 
       - name: Generate CNB files
         run: |
@@ -413,7 +413,7 @@ jobs:
         include: ${{ fromJSON(needs.compile.outputs.buildpacks) }}
     steps:
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@af8c06ccd592e27001cbf78083dcc9b47aa6652a # v6.1.1
+        uses: buildpacks/github-actions/setup-tools@324e5c43145b68f60bf74a269f5ba7b2969e03db # v6.2.1
 
       - name: Check if version is already in the registry
         id: check
@@ -472,7 +472,7 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Install crane
-        uses: buildpacks/github-actions/setup-tools@af8c06ccd592e27001cbf78083dcc9b47aa6652a # v6.1.1
+        uses: buildpacks/github-actions/setup-tools@324e5c43145b68f60bf74a269f5ba7b2969e03db # v6.2.1
 
       - name: Install Languages CLI
         uses: heroku/languages-github-actions/.github/actions/install-languages-cli@main
