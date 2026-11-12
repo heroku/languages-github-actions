@@ -199,16 +199,20 @@ on:
 jobs:
   prepare-release:
     uses: heroku/languages-github-actions/.github/workflows/_classic-buildpack-prepare-release.yml@latest
-    secrets: inherit
+    with:
+      app_id: ${{ vars.LINGUIST_GH_APP_ID }}
+    secrets:
+      app_private_key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
 ```
 
 #### Inputs
 
 | Name                    | Description                                                                                                                    | Required | Default |
 |-------------------------|--------------------------------------------------------------------------------------------------------------------------------|----------|---------|
+| `app_id`                | Application ID of the GitHub application (e.g. the Linguist App) used to open the release PR                                   | true     |         |
 | `custom_update_command` | An additional command to run before changes are committed, which can make use of the env vars EXISTING_VERSION and NEW_VERSION | false    |         |
 
-In addition, the workflow requires that the `LINGUIST_*` env vars are available (which are set as organization variables).
+In addition, the workflow requires that the `LINGUIST_GH_APP_USERNAME` and `LINGUIST_GH_APP_EMAIL` variables are available (which are set as organization variables).
 
 #### Outputs
 
@@ -219,7 +223,9 @@ In addition, the workflow requires that the `LINGUIST_*` env vars are available 
 
 #### Secrets
 
-The workflow requires that `inherit` mode be enabled, so that it can access the `LINGUIST_GH_PRIVATE_KEY` organization secret.
+| Name              | Description                                                   | Required |
+|-------------------|---------------------------------------------------------------|----------|
+| `app_private_key` | Private key of the GitHub application (e.g. the Linguist App) | true     |
 
 ## Actions
 
