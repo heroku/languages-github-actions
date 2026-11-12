@@ -46,6 +46,16 @@ jobs:
       from_version: ${{ steps.existing-version.outputs.version }}
       to_version: ${{ steps.new-version.outputs.version }}
     steps:
+      - name: Check for deprecated secrets inheritance
+        env:
+          HAS_APP_ID: ${{ inputs.app_id != '' }}
+          HAS_APP_PRIVATE_KEY: ${{ secrets.app_private_key != '' }}
+        run: |
+          if [[ "${HAS_APP_ID}" == "true" && "${HAS_APP_PRIVATE_KEY}" == "true" ]]; then
+            exit 0
+          fi
+          echo "::warning title=Deprecated secrets inheritance::Calling _classic-buildpack-prepare-release.yml without the app_id input and app_private_key secret is deprecated and will stop working in a future release. Pass them explicitly instead of using 'secrets: inherit'. See https://github.com/heroku/languages-github-actions#classic-buildpack---prepare-release"
+
       # We use our GitHub App's access token instead of GITHUB_TOKEN since otherwise other
       # workflows (such as CI) won't automatically run on any PRs opened by this workflow:
       # https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow
