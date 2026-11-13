@@ -7,6 +7,14 @@ on:
         description: An additional command to run before changes are committed, which can make use of the env vars EXISTING_VERSION and NEW_VERSION.
         type: string
         required: false
+      app_id:
+        description: Application ID of the GitHub application (e.g. the Linguist App) used to open the release PR.
+        type: string
+        required: true
+    secrets:
+      app_private_key:
+        description: Private key of the GitHub application (e.g. the Linguist App).
+        required: true
     outputs:
       from_version:
         description: "The existing latest buildpack version"
@@ -40,10 +48,8 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: generate-token
         with:
-          app-id: ${{ vars.LINGUIST_GH_APP_ID }}
-          # Note: The calling workflow must enable secrets inheritance for this variable to be accessible:
-          # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idsecretsinherit
-          private-key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.app_private_key }}
 
       - name: Checkout
         uses: actions/checkout@v7
