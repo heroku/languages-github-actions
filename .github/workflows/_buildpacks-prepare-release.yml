@@ -4,16 +4,16 @@ on:
   workflow_call:
     inputs:
       app_id:
-        description: Application ID of GitHub application (e.g.; the Linguist App)
+        description: Application ID of GitHub application (e.g. the Linguist App)
         type: string
         required: true
       app_email:
-        description: The email address of the GitHub application bot user (e.g.; the Linguist App)
+        description: The email address of the GitHub application bot user (e.g. the Linguist App)
         type: string
         required: false
         default: ${{ vars.LINGUIST_GH_APP_EMAIL }}
       app_username:
-        description: The username of the GitHub application bot user (e.g.; the Linguist App)
+        description: The username of the GitHub application bot user (e.g. the Linguist App)
         type: string
         required: false
         default: ${{ vars.LINGUIST_GH_APP_USERNAME }}
