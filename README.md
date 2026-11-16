@@ -7,6 +7,7 @@ A set of custom GitHub Actions and reusable workflow used by the Languages Team.
   - [Buildpacks - Prepare Release](#buildpacks---prepare-release)
   - [Buildpacks - Release](#buildpacks---release)
   - [Classic Buildpack - Prepare Release](#classic-buildpack---prepare-release)
+  - [Classic Buildpack - Publish](#classic-buildpack---publish)
 - [Actions](#actions)
   - [Install Languages CLI](#install-languages-cli)
 - [Development](#development)
@@ -227,6 +228,95 @@ In addition, the workflow requires that the `LINGUIST_GH_APP_USERNAME` and `LING
 | Name              | Description                                                   | Required |
 |-------------------|---------------------------------------------------------------|----------|
 | `app_private_key` | Private key of the GitHub application (e.g. the Linguist App) | true     |
+
+### Classic Buildpack - Publish
+
+Publishes a "classic" buildpack release by:
+- creating and pushing a `v{N}` git tag for the newest versioned heading in `CHANGELOG.md`
+- publishing that tag to the buildpack registry (authenticated using GitHub OIDC) and waiting for the revision to be published
+- creating a GitHub Release using the changelog entry as the release notes
+- posting a release marker to Honeycomb (when `honeycomb_api_key` is provided)
+
+The workflow is designed to be triggered by the merge of the pull request opened by [Classic Buildpack - Prepare Release](#classic-buildpack---prepare-release), or manually using `workflow_dispatch`. On a `pull_request` event it only runs once the pull request has been merged, and when not in QA mode the ref must be the default branch. The caller is responsible for restricting which pull requests count as the release PR.
+
+Before publishing, a pre-flight check compares the existing tag, registry revision and GitHub Release for the version. Re-running after a partial failure resumes where it left off, but inconsistent state (for example a tag pointing at a different commit) fails the run so it can be cleaned up manually.
+
+When a production publish started by a `pull_request` event begins, a comment is added to the prepare release PR. If it fails, a failure comment is added to that PR and a message is sent to Slack. Runs started with `workflow_dispatch` and QA runs do not send notifications.
+
+Publishes for the same `buildpack_id` are serialized, so a second run waits for the first to finish rather than cancelling it.
+
+You can pin to:
+- the [latest release](https://github.com/heroku/languages-github-actions/releases/latest) version with `@latest`
+- a [specific release](https://github.com/heroku/languages-github-actions/releases) version with `@v{major}.{minor}.{patch}`
+- the development version with `@main`
+
+#### Example Usage
+
+```yaml
+name: Release Buildpack
+
+on:
+  # Auto-trigger when the "Prepare release" PR (created by the
+  # _classic-buildpack-prepare-release.yml workflow) is merged.
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+  workflow_dispatch:
+
+# The caller must grant at least the permissions the workflow needs.
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    # On `pull_request`, only run for the merged auto-generated
+    # "Prepare release" PR. Manual dispatches always run.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'prepare-release' &&
+       github.event.pull_request.user.login == 'heroku-linguist[bot]')
+    uses: heroku/languages-github-actions/.github/workflows/_classic-buildpack-publish.yml@latest
+    with:
+      buildpack_id: "heroku/ruby"
+      app_id: ${{ vars.LINGUIST_GH_APP_ID }}
+    secrets:
+      app_private_key: ${{ secrets.LINGUIST_GH_PRIVATE_KEY }}
+      slack_webhook_url: ${{ secrets.BUILDPACK_RELEASE_FAILURE_WEBHOOK_URL }}
+      honeycomb_api_key: ${{ secrets.HONEYCOMB_API_KEY }}
+```
+
+#### Inputs
+
+| Name           | Description                                                                                                               | Required | Default |
+|----------------|---------------------------------------------------------------------------------------------------------------------------|----------|---------|
+| `buildpack_id` | Registry name of the buildpack in `owner/name` form, using lowercase alphanumerics and hyphens (e.g. `heroku/go`)         | true     |         |
+| `qa`           | QA mode: publishes to the staging registry, appends `-qa` to tags, and creates draft GitHub releases                      | false    | `false` |
+| `app_id`       | Application ID of the GitHub application (e.g. the Linguist App) used to comment on the prepare PR and author the Release | true     |         |
+
+#### Secrets
+
+| Name                | Description                                                                                                                           | Required |
+|---------------------|---------------------------------------------------------------------------------------------------------------------------------------|----------|
+| `app_private_key`   | Private key of the GitHub application (e.g. the Linguist App)                                                                         | true     |
+| `slack_webhook_url` | Slack Workflow Builder webhook URL for `#heroku-languages-ops`, used to post a message if a production publish fails                  | true     |
+| `honeycomb_api_key` | Honeycomb API key with the "create markers" scope, used to post a release marker to the `builds` dataset after a production publish   | false    |
+
+#### Permissions
+
+The calling workflow must grant the following permissions, since the permissions of a reusable workflow are capped by what the caller provides:
+
+| Name       | Level   | Used for                                                                    |
+|------------|---------|-----------------------------------------------------------------------------|
+| `id-token` | `write` | Minting the OIDC token the buildpack registry uses to authorize the publish |
+| `contents` | `write` | Pushing the version tag and creating the GitHub Release                     |
+
+In addition, the workflow runs on the `pub-hk-ubuntu-24.04-ip` runner group, which is required for the GitHub application token to be accepted by the IP allow list of the `heroku` organization.
 
 ## Actions
 
